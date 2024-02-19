@@ -21,7 +21,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         Self {
             host_address: None,
             host_port: None,
@@ -30,11 +30,15 @@ impl Config {
         }
     }
     pub fn read_config() -> Config {
+        let mut config = Config::empty();
         let content = match std::fs::read_to_string(CONFIG_NAME) {
             Ok(content) => content,
-            Err(err) => panic!("{}; Failed to read: {CONFIG_NAME}", err.to_string())
+            Err(err) => {
+                eprintln!("{}; Failed to read: {CONFIG_NAME}", err.to_string());
+                return config;
+            }
         };
-        let mut config = Config::new();
+
         for line in content.lines() {
             let Some(equal_sign) = line.find('=') else {
                 continue

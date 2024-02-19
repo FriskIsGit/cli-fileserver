@@ -1,56 +1,41 @@
-use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+use std::io::Result;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::time::Duration;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
-fn connect_local(port: u16) {
+pub fn connect_to_localhost(port: u16) -> Result<TcpStream> {
     let address = &format!("localhost:{port}");
-    let connection_result = TcpStream::connect(address);
-    if let Err(err) = connection_result {
-        println!("Failed to connect: {err}");
-        return;
-    }
-    successfully_connect(connection_result.unwrap())
+    // How to convert localhost to IP for a connection with a timeout?
+    TcpStream::connect(address)
 }
 
-fn connect_ipv4(server: &str, port: u16) {
+fn connect_ipv4(server: &str, port: u16) -> Result<TcpStream> {
     let address = &format!("{server}:{port}");
     let socket = create_ipv4_socket(address, port);
-    let connection_result = TcpStream::connect_timeout(&socket, TIMEOUT);
-    successfully_connect(connection_result.unwrap())
+    TcpStream::connect_timeout(&socket, TIMEOUT)
 }
 
-fn successfully_connect(mut stream: TcpStream) {
-    println!("Connected!");
+pub fn receive_connection(address: &str) -> Result<TcpStream> {
+    // This will request the OS to assign a port that's available
+    receive_connection_at_port(address, 0)
+}
 
-    let msg = b"Hello!";
-    stream.write(msg).unwrap();
-    println!("Sent Hello, awaiting reply...");
-
-    let mut data = [0u8; 6];
-    match stream.read_exact(&mut data) {
-        Ok(_) => {
-            if &data == msg {
-                println!("Reply is ok!");
-            } else {
-                let text = String::from_utf8(data.to_vec()).unwrap();
-                println!("Unexpected reply: {}", text);
-            }
-        },
-        Err(e) => {
-            println!("Failed to receive data: {}", e);
-        }
-    }
+// Return available and valid connections at the time of the call
+pub fn receive_connection_at_port(address: &str, mut port: u16) -> Result<TcpStream> {
+    let full_address = &format!("{address}:{port}");
+    // Binding with timeout?
+    let listener = TcpListener::bind(full_address).expect("Couldn't connect");
+    port = listener.local_addr().unwrap().port();
+    println!("Port assigned {port}");
+    listener.incoming().next().unwrap()
 }
 
 fn create_ipv4_socket(address: &str, port: u16) -> SocketAddr {
     let octets = ipv4_address_to_byte_vec(address);
     let ipv4 = Ipv4Addr::from(octets);
-    let socket = SocketAddr::new(IpAddr::V4(ipv4), port);;
-    socket
+    SocketAddr::new(IpAddr::V4(ipv4), port)
 }
-
 
 pub fn ipv4_address_to_byte_vec(address: &str) -> [u8; 4] {
     let mut octets = [0u8; 4];
