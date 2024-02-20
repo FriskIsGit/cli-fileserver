@@ -1,9 +1,9 @@
 SERVER SETUP:
 
-host_port=
+host_port=35
 host=localhost
 =======================
 CONNECT CONFIGURATION:
 
-connect=localhost
-connect_port=
+connect=127.0.0.1
+connect_port=35

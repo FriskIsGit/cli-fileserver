@@ -9,10 +9,14 @@ pub fn connect_to_localhost(port: u16) -> Result<TcpStream> {
     // How to convert localhost to IP for a connection with a timeout?
     TcpStream::connect(address)
 }
+pub fn connect_to_address(port: u16) -> Result<TcpStream> {
+    let address = &format!("localhost:{port}");
+    // How to convert localhost to IP for a connection with a timeout?
+    TcpStream::connect(address)
+}
 
-fn connect_ipv4(server: &str, port: u16) -> Result<TcpStream> {
-    let address = &format!("{server}:{port}");
-    let socket = create_ipv4_socket(address, port);
+pub(crate) fn connect_ipv4(server: &str, port: u16) -> Result<TcpStream> {
+    let socket = create_ipv4_socket(server, port);
     TcpStream::connect_timeout(&socket, TIMEOUT)
 }
 
@@ -40,6 +44,7 @@ pub fn ipv4_address_to_byte_vec(address: &str) -> [u8; 4] {
     let components = address.split('.');
     let mut i = 0;
     for comp in components {
+        println!("comp {:?}", comp);
         let Ok(byte) = comp.parse::<u8>() else {
             panic!("Error: The address {address} is invalid")
         };

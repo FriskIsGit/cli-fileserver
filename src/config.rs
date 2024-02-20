@@ -19,8 +19,8 @@ const DEFAULT_ADDR: &str = "localhost";
 pub struct Config {
     pub host_address: Option<String>,
     pub host_port: Option<u16>,
-    pub client_address: Option<String>,
-    pub client_port: Option<u16>,
+    pub connect_address: Option<String>,
+    pub connect_port: Option<u16>,
 }
 
 impl Config {
@@ -28,8 +28,8 @@ impl Config {
         Self {
             host_address: None,
             host_port: None,
-            client_address: None,
-            client_port: None,
+            connect_address: None,
+            connect_port: None,
         }
     }
     pub fn read_config() -> Config {
@@ -55,13 +55,13 @@ impl Config {
                 config.host_address = Some(value_str.to_string());
             }
             else if key == CONNECT_ADDR {
-                config.client_address = Some(value_str.to_string());
+                config.connect_address = Some(value_str.to_string());
             }
             else if key == HOST_PORT {
                 config.host_port = Some(value_str.parse::<u16>().unwrap());
             }
             else if key == CONNECT_PORT {
-                config.client_port = Some(value_str.parse::<u16>().unwrap());
+                config.connect_port = Some(value_str.parse::<u16>().unwrap());
             }
         }
         config
@@ -70,11 +70,11 @@ impl Config {
         if self.host_address.is_none() {
             self.host_address = Some(DEFAULT_ADDR.to_string())
         }
-        if self.client_address.is_none() {
-            self.client_address = Some(DEFAULT_ADDR.to_string())
+        if self.connect_address.is_none() {
+            self.connect_address = Some(DEFAULT_ADDR.to_string())
         }
-        if self.client_port.is_none() {
-            self.client_port = Some(DEFAULT_PORT)
+        if self.connect_port.is_none() {
+            self.connect_port = Some(DEFAULT_PORT)
         }
         if self.host_port.is_none() {
             self.host_port = Some(DEFAULT_PORT)

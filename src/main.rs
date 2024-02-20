@@ -23,15 +23,17 @@ fn main() {
         return;
     }
     match program_args.args[0].as_str() {
-        HOST => server_impl(config.host_port.unwrap()),
-        CONNECT => client_impl(config.client_port.unwrap()),
+        HOST => server_impl(config),
+        CONNECT => client_impl(config),
         _ => {}
     }
 }
 
-fn client_impl(port: u16) {
+fn client_impl(config: Config) {
     println!("Attempting connection");
-    let connection_res = connection::connect_to_localhost(port);
+    let connect_to = &config.connect_address.unwrap();
+    let port = config.connect_port.unwrap();
+    let connection_res = connection::connect_ipv4(connect_to, port);
     let Ok(mut stream) = connection_res else {
         eprintln!("Failed to connect: {}", connection_res.unwrap_err());
         return;
@@ -41,9 +43,11 @@ fn client_impl(port: u16) {
     read_and_handle_packet(&mut stream);
 }
 
-fn server_impl(port: u16) {
+fn server_impl(config: Config) {
     println!("Running server");
-    let bind_res = connection::receive_connection_at_port("localhost", port);
+    let host_address = &config.host_address.unwrap();
+    let port = config.host_port.unwrap();
+    let bind_res = connection::receive_connection_at_port(host_address, port);
     let Ok(mut stream) = bind_res else {
         eprintln!("Failed to bind: {}", bind_res.unwrap_err());
         return;
