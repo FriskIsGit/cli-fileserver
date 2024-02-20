@@ -22,12 +22,10 @@ pub fn receive_connection(address: &str) -> Result<TcpStream> {
 }
 
 // Return available and valid connections at the time of the call
-pub fn receive_connection_at_port(address: &str, mut port: u16) -> Result<TcpStream> {
+pub fn receive_connection_at_port(address: &str, port: u16) -> Result<TcpStream> {
     let full_address = &format!("{address}:{port}");
     // Binding with timeout?
     let listener = TcpListener::bind(full_address).expect("Couldn't connect");
-    port = listener.local_addr().unwrap().port();
-    println!("Port assigned {port}");
     listener.incoming().next().unwrap()
 }
 

@@ -1,88 +1,89 @@
 use std::io::{Read, Write};
+use std::net::TcpStream;
+use crate::args::{CONNECT, ProgramArgs, SERVER};
 use crate::config::Config;
+use crate::packet::{FIELD_OFFSET, FileInfoPacket, FilePacket, Packet};
 
 mod connection;
 mod config;
 mod file_operator;
-
-const SERVE: &str = "serve";
-const CONNECT: &str = "connect";
+mod packet;
+mod args;
 
 fn main() {
-    let config = Config::read_config();
 
+    check_file_packet();
+    check_file_info_packet();
+    let config = Config::read_config();
     // fileserver -> fs
     // SETUP: fileserver serve / fileserver connect
     // EXCHANGE: share path / accept (id)
     let program_args = ProgramArgs::retrieve();
     if !program_args.has_args() {
-        print_info();
+        ProgramArgs::print_info();
         return;
     }
     println!("ARGS: {:?}", program_args.args);
-    if program_args.args[0] == SERVE {
+    let PORT = 2152;
+    if program_args.args[0] == SERVER {
         // setup server
         println!("Running server");
-        let server = connection::receive_connection_at_port("localhost", 2152);
-        println!("server_stream {:?}", server);
+        let bind_res = connection::receive_connection_at_port("localhost", PORT);
+        let Ok(mut stream) = bind_res else {
+            eprintln!("Failed to bind: {}", bind_res.unwrap_err());
+            return;
+        };
+        let port = stream.local_addr().unwrap().port();
+        println!("Port assigned {port}");
+        write_data(b"Hello!", &mut stream);
     } else if program_args.args[0] == CONNECT {
         println!("Attempting connection");
-        let connection_res = connection::connect_to_localhost(2152);
-        let Ok(mut stream) = connection_res  else {
+        let connection_res = connection::connect_to_localhost(PORT);
+        let Ok(mut stream) = connection_res else {
             eprintln!("Failed to connect: {}", connection_res.unwrap_err());
             return;
         };
         println!("Connected!");
+        read_data(&mut stream);
+    }
+}
 
-        let msg = b"Hello!";
-        stream.write(msg).unwrap();
-        println!("Sent Hello, awaiting reply...");
+fn write_data(data: &[u8], stream: &mut TcpStream) {
+    stream.write(data).unwrap();
+}
 
-        let mut data = [0u8; 6];
-        match stream.read_exact(&mut data) {
-            Ok(_) => {
-                if &data == msg {
-                    println!("Reply is ok!");
-                } else {
-                    let text = String::from_utf8(data.to_vec()).unwrap();
-                    println!("Unexpected reply: {}", text);
-                }
-            }
-            Err(e) => {
-                println!("Failed to receive data: {}", e);
-            }
+// try: stream.read_to_end() see if it buffers in disk
+fn read_data(stream: &mut TcpStream) {
+    let mut data = [0u8; 10];
+
+    match stream.read(&mut data) {
+        Ok(_) => {
+            let text = String::from_utf8(data.to_vec()).unwrap();
+            println!("Reply: {}", text);
+        }
+        Err(e) => {
+            println!("Failed to receive data: {}", e);
         }
     }
 }
 
-fn print_info() {
-    println!("Specify server or client:");
-    println!("{SERVE}");
-    println!("{CONNECT}")
+fn check_file_packet() {
+    let file_packet = FilePacket::new(0, 12, vec![1,2,3,4,5,6,7,8,9,10,11,12]);
+    println!("TO TRANSPORT: {} {} {:?}", file_packet.chunk_id, file_packet.payload_size, file_packet.file_bytes);
+    let parcel = file_packet.parcel();
+    println!("Parcel {:?}", parcel);
+    let field_bytes = &parcel[FIELD_OFFSET..parcel.len()];
+    let constructed = FilePacket::construct_packet(field_bytes).expect("Failed to construct FilePacket packet");
+    println!("Construct: {} {} {:?}", constructed.chunk_id, constructed.payload_size, constructed.file_bytes);
+    return;
 }
-
-// args: [program.exe, 0, 1, 2, ...]
-pub struct ProgramArgs {
-    // We can use 'exe' path for determining the relative location of config.txt
-    pub exe: String,
-    pub args: Vec<String>,
-}
-
-impl ProgramArgs {
-    pub fn retrieve() -> Self {
-        let mut args: Vec<String> = std::env::args().collect();
-        if args.len() == 0 {
-            panic!("Is this possible?")
-        }
-        let exe_path = std::mem::take(&mut args[0]);
-        args.rotate_left(1);
-        unsafe {
-            args.set_len(args.len() - 1)
-        }
-        Self { exe: exe_path, args }
-    }
-
-    pub fn has_args(&self) -> bool {
-        self.args.len() > 0
-    }
+fn check_file_info_packet() {
+    let file_info = FileInfoPacket::new(313, "eefegeg.dą".into());
+    println!("ORIGINAL: {} {} ", file_info.file_size, file_info.file_name);
+    let parcel = file_info.parcel();
+    println!("Parcel {:?}", parcel);
+    let field_bytes = &parcel[FIELD_OFFSET..parcel.len()];
+    let received = FileInfoPacket::construct_packet(field_bytes).expect("Failed to construct FileInfoPacket packet");
+    println!("RECEIVED: {} {} ", received.file_size, received.file_name);
+    return;
 }
