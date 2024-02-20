@@ -1,9 +1,9 @@
 SERVER SETUP:
 
-host_port=8000
+host_port=
 host=localhost
 =======================
-CLIENT CONFIGURATION:
+CONNECT CONFIGURATION:
 
-client=localhost
-client_port=8000
+connect=localhost
+connect_port=

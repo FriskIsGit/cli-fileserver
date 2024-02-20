@@ -1,5 +1,5 @@
 
-pub const SERVER: &str = "server";
+pub const SERVER: &str = "host";
 pub const CONNECT: &str = "connect";
 
 // parse program specific arguments like flags

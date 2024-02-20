@@ -1,8 +1,8 @@
 
 const HOST_ADDR: &str = "host";
 const HOST_PORT: &str = "host_port";
-const CLIENT_ADDR: &str = "client";
-const CLIENT_PORT: &str = "client_port";
+const CONNECT_ADDR: &str = "connect";
+const CONNECT_PORT: &str = "connect_port";
 
 const CONFIG_NAME: &str = "config.txt";
 /**
@@ -12,6 +12,9 @@ const CONFIG_NAME: &str = "config.txt";
     Each pair is separated by a new line
     Quotation marks are not used for sequences of characters
 */
+
+const DEFAULT_PORT: u16 = 10211;
+const DEFAULT_ADDR: &str = "localhost";
 
 pub struct Config {
     pub host_address: Option<String>,
@@ -51,17 +54,31 @@ impl Config {
             if key == HOST_ADDR {
                 config.host_address = Some(value_str.to_string());
             }
+            else if key == CONNECT_ADDR {
+                config.client_address = Some(value_str.to_string());
+            }
             else if key == HOST_PORT {
                 config.host_port = Some(value_str.parse::<u16>().unwrap());
             }
-            else if key == CLIENT_ADDR {
-                config.client_address = Some(value_str.to_string());
-            }
-            else if key == CLIENT_PORT {
+            else if key == CONNECT_PORT {
                 config.client_port = Some(value_str.parse::<u16>().unwrap());
             }
         }
         config
+    }
+    pub fn assign_defaults(&mut self) {
+        if self.host_address.is_none() {
+            self.host_address = Some(DEFAULT_ADDR.to_string())
+        }
+        if self.client_address.is_none() {
+            self.client_address = Some(DEFAULT_ADDR.to_string())
+        }
+        if self.client_port.is_none() {
+            self.client_port = Some(DEFAULT_PORT)
+        }
+        if self.host_port.is_none() {
+            self.host_port = Some(DEFAULT_PORT)
+        }
     }
 }
 

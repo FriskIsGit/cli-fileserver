@@ -7,13 +7,11 @@ PACKET STRUCTURE FORMAT:
      |  id | content size | content |
      | u32 |      u32     | Vec<u8> |
      --------------------------------
-    packets can not be bigger than ~ 4.29 GB
+    packet max size ~ 4.29 GB
 */
-use std::string::FromUtf8Error;
 
 pub const FIELD_OFFSET: usize = 8;
 pub trait Packet {
-
     // Every packet must identify itself
     fn id(&self) -> u32;
 
@@ -47,31 +45,23 @@ pub trait Packet {
         self.parcel_fields(&mut all_data[FIELD_OFFSET..]);
         all_data
     }
+}
 
-    fn read_id(byte_stream: &Vec<u8>) -> Option<u32> {
-        if byte_stream.len() < 4 {
-            return None;
-        }
-        let id_bytes: [u8; 4] = byte_stream[0..4].try_into().unwrap();
-        Some(u32::from_be_bytes(id_bytes))
-    }
+pub fn read_id(id_bytes: [u8; 4]) -> u32 {
+    u32::from_be_bytes(id_bytes)
+}
 
-    fn read_content_size(byte_stream: &Vec<u8>) -> Option<u32> {
-        if byte_stream.len() < 8 {
-            return None;
-        }
-        let content_size_bytes: [u8; 4] = byte_stream[4..8].try_into().unwrap();
-        Some(u32::from_be_bytes(content_size_bytes))
-    }
+pub fn read_content_size(packet_size: [u8; 4]) -> u32 {
+    u32::from_be_bytes(packet_size)
 }
 
 // PACKET STRUCT IMPLEMENTATIONS
-pub struct FileInfoPacket {
+pub struct TransferOfferPacket {
     pub file_size: u64, // in bytes
     pub file_name: String,
 }
 
-impl FileInfoPacket {
+impl TransferOfferPacket {
     pub const ID: u32 = 100_000;
     pub fn new(file_size: u64, file_name: String) -> Self {
         Self {
@@ -80,9 +70,9 @@ impl FileInfoPacket {
         }
     }
 }
-impl Packet for FileInfoPacket {
+impl Packet for TransferOfferPacket {
     fn id(&self) -> u32 {
-        FileInfoPacket::ID
+        TransferOfferPacket::ID
     }
 
     fn size(&self) -> u32 {
@@ -171,5 +161,42 @@ impl Packet for FilePacket {
             field_bytes[f] = self.file_bytes[i];
             f += 1;
         }
+    }
+}
+
+// ANSWER PACKET (respond to query)
+pub struct AnswerPacket {
+    pub yes: bool
+}
+
+impl AnswerPacket {
+    pub const ID: u32 = 300_000;
+    pub fn new(yes: bool) -> Self {
+        Self { yes }
+    }
+    pub fn yes(&self) -> bool {
+        self.yes
+    }
+}
+impl Packet for AnswerPacket {
+    fn id(&self) -> u32 {
+        AnswerPacket::ID
+    }
+
+    fn size(&self) -> u32 {
+        1
+    }
+
+    fn construct_packet(field_bytes: &[u8]) -> Result<Self, String> where Self: Sized {
+        let length = field_bytes.len();
+        if length == 0 {
+            return Err(format!("Packet has {length} bytes but 1 was expected"));
+        }
+        let yes = if field_bytes[0] == 1 { true } else { false };
+        Ok(Self::new(yes))
+    }
+
+    fn parcel_fields(&self, field_bytes: &mut [u8]) {
+        field_bytes[0] = if self.yes { 1 } else { 0 }
     }
 }
