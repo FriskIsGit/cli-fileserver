@@ -56,12 +56,12 @@ pub fn read_content_size(packet_size: [u8; 4]) -> u32 {
 }
 
 // PACKET STRUCT IMPLEMENTATIONS
-pub struct TransferOfferPacket {
+pub struct FileOfferPacket {
     pub file_size: u64, // in bytes
     pub file_name: String,
 }
 
-impl TransferOfferPacket {
+impl FileOfferPacket {
     pub const ID: u32 = 100_000;
     pub fn new(file_size: u64, file_name: String) -> Self {
         Self {
@@ -70,9 +70,9 @@ impl TransferOfferPacket {
         }
     }
 }
-impl Packet for TransferOfferPacket {
+impl Packet for FileOfferPacket {
     fn id(&self) -> u32 {
-        TransferOfferPacket::ID
+        FileOfferPacket::ID
     }
 
     fn size(&self) -> u32 {

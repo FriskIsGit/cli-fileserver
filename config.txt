@@ -1,9 +1,11 @@
+
 SERVER SETUP:
 
-host_port=35
+host_auto_accept=true
+host_port=7777
 host=localhost
 =======================
 CONNECT CONFIGURATION:
 
 connect=127.0.0.1
-connect_port=35
+connect_port=7777

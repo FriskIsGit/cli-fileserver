@@ -1,4 +1,6 @@
 
+const HOST_AUTO_ACCEPT: &str = "host_auto_accept";
+
 const HOST_ADDR: &str = "host";
 const HOST_PORT: &str = "host_port";
 const CONNECT_ADDR: &str = "connect";
@@ -21,6 +23,7 @@ pub struct Config {
     pub host_port: Option<u16>,
     pub connect_address: Option<String>,
     pub connect_port: Option<u16>,
+    pub auto_accept: Option<bool>,
 }
 
 impl Config {
@@ -30,6 +33,7 @@ impl Config {
             host_port: None,
             connect_address: None,
             connect_port: None,
+            auto_accept: None,
         }
     }
     pub fn read_config() -> Config {
@@ -63,6 +67,9 @@ impl Config {
             else if key == CONNECT_PORT {
                 config.connect_port = Some(value_str.parse::<u16>().unwrap());
             }
+            else if key == HOST_AUTO_ACCEPT {
+                config.auto_accept = Some(value_str.parse::<bool>().unwrap());
+            }
         }
         config
     }
@@ -78,6 +85,9 @@ impl Config {
         }
         if self.host_port.is_none() {
             self.host_port = Some(DEFAULT_PORT)
+        }
+        if self.auto_accept.is_none() {
+            self.auto_accept = Some(false)
         }
     }
 }

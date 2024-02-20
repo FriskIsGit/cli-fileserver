@@ -1,8 +1,8 @@
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
-use crate::packet::{FIELD_OFFSET, TransferOfferPacket, FilePacket, Packet, AnswerPacket};
+use crate::packet::{FIELD_OFFSET, FileOfferPacket, FilePacket, Packet, AnswerPacket};
 
 mod connection;
 mod config;
@@ -22,6 +22,7 @@ fn main() {
         ProgramArgs::print_info();
         return;
     }
+    // Listen to connections, y/n, if n listen for another connection,
     match program_args.args[0].as_str() {
         HOST => server_impl(config),
         CONNECT => client_impl(config),
@@ -38,43 +39,99 @@ fn client_impl(config: Config) {
         eprintln!("Failed to connect: {}", connection_res.unwrap_err());
         return;
     };
-    println!("Connected!");
-    read_and_handle_packet(&mut stream);
-    read_and_handle_packet(&mut stream);
+    let peer_addr = stream.peer_addr().unwrap().ip();
+    println!("Connected to {peer_addr}!");
+    established_connection_stage(stream);
 }
 
 fn server_impl(config: Config) {
     println!("Running server");
     let host_address = &config.host_address.unwrap();
     let port = config.host_port.unwrap();
-    let bind_res = connection::receive_connection_at_port(host_address, port);
-    let Ok(mut stream) = bind_res else {
-        eprintln!("Failed to bind: {}", bind_res.unwrap_err());
-        return;
+    let listener = connection::create_server(host_address, port);
+    let port = listener.local_addr().unwrap().port();
+    println!("Hosting server on port: {port}");
+
+    let auto_accept = if let Some(accept) = config.auto_accept { accept } else { false };
+    // Connection listener implementation
+    for incoming_conn in listener.incoming() {
+        match incoming_conn {
+            Ok(stream) => {
+                let ip = stream.peer_addr().unwrap().ip();
+                println!("Do you want to accept connection from: {} (y/n)", ip);
+                let response = read_line();
+                if !auto_accept && !response.starts_with('y') {
+                    let _ = stream.shutdown(Shutdown::Both);
+                    continue
+                }
+                let peer_addr = stream.peer_addr().unwrap().ip();
+                println!("Connected to {peer_addr}!");
+                established_connection_stage(stream);
+            }
+            Err(err) => {
+                eprintln!("Failed to accept connection: {err}");
+                continue
+            }
+        };
     };
-    let port = stream.local_addr().unwrap().port();
-    println!("Port assigned {port}");
-    let packet1 = TransferOfferPacket::new(55555, "file1.txt".to_string());
-    let packet2 = TransferOfferPacket::new(55556, "file2.txt".to_string());
-    //let packet = FilePacket::new(0, 7, vec![7,6,5,4,3,2,1]);
-    stream.write(&packet1.parcel()).unwrap();
+
+}
+
+fn established_connection_stage(mut stream: TcpStream) {
+    loop {
+        println!("[shutdown, send <count>, receive <count>]");
+        let line = read_line();
+        let command = line.as_str();
+        println!("[{command}]");
+        if command.starts_with("shutdown") {
+            let _ = stream.shutdown(Shutdown::Both);
+            break;
+        } else if command.starts_with("send") {
+            let whitespace = command.find(' ').unwrap();
+            let count = command[whitespace + 1..command.len()].parse::<usize>().unwrap();
+            for _ in 0..count {
+                let packet = FileOfferPacket::new(55555, "file1.txt".to_string());
+                stream.write(&packet.parcel()).unwrap();
+            }
+        } else if command.starts_with("receive") {
+            let whitespace = command.find(' ').unwrap();
+            let count = command[whitespace + 1..command.len()].parse::<usize>().unwrap();
+            println!("COUNT {count}");
+            for _ in 0..count {
+                read_and_handle_packet(&mut stream);
+            }
+        }
+    }
+
+    /*let packet2 = FileOfferPacket::new(55556, "file2.txt".to_string());
+    let packet = FilePacket::new(0, 7, vec![7,6,5,4,3,2,1]);
+
     stream.write(&packet2.parcel()).unwrap();
+    stream.write(&packet.parcel()).unwrap();*/
+
 }
 
 fn read_and_handle_packet(stream: &mut TcpStream) {
     let mut id = [0u8; 4];
-    read_to_buffer(&mut id, stream);
+    if !read_to_buffer(&mut id, stream) {
+        eprintln!("Connection closed abruptly");
+        return;
+    }
     let id = packet::read_id(id);
 
     let mut packet_size = [0u8; 4];
-    read_to_buffer(&mut packet_size, stream);
+    if !read_to_buffer(&mut packet_size, stream) {
+        eprintln!("Connection closed abruptly");
+    }
     let packet_size = packet::read_content_size(packet_size);
 
     let mut field_buffer = vec![0u8; packet_size as usize];
-    read_to_buffer(&mut field_buffer, stream);
+    if !read_to_buffer(&mut field_buffer, stream) {
+        eprintln!("Connection closed abruptly");
+    }
     match id {
-        TransferOfferPacket::ID => {
-            let construct_res = TransferOfferPacket::construct_packet(&field_buffer);
+        FileOfferPacket::ID => {
+            let construct_res = FileOfferPacket::construct_packet(&field_buffer);
             match construct_res {
                 Ok(packet) => {
                     println!("TransferOfferPacket {} {}", packet.file_size, packet.file_name)
@@ -114,12 +171,21 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
     }
 }
 
-fn read_to_buffer(buffer: &mut [u8], stream: &mut TcpStream) {
-    match stream.read_exact(buffer) {
-        Ok(bytes_read) => {}
+type Failed = bool;
+fn read_to_buffer(buffer: &mut [u8], stream: &mut TcpStream) -> Failed {
+    return match stream.read_exact(buffer) {
+        Ok(bytes_read) => true,
         Err(e) => {
             eprintln!("Failed to read packet fields: {e}");
-            return;
+            false
         }
+    }
+}
+
+fn read_line() -> String {
+    let mut buffer = String::new();
+    return match std::io::stdin().read_line(&mut buffer) {
+        Ok(_) => buffer.trim_end().to_string(),
+        Err(_) => "".into(),
     }
 }

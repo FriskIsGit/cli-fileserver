@@ -1,4 +1,4 @@
-use crate::packet::{FIELD_OFFSET, TransferOfferPacket, FilePacket, Packet, AnswerPacket};
+use crate::packet::{FIELD_OFFSET, FileOfferPacket, FilePacket, Packet, AnswerPacket};
 
 #[test]
 fn file_packet_test() {
@@ -12,10 +12,10 @@ fn file_packet_test() {
 }
 #[test]
 fn transfer_offer_test() {
-    let original = TransferOfferPacket::new(313, "àáąâãäå.zip".into());
+    let original = FileOfferPacket::new(313, "àáąâãäå.zip".into());
     let parcel = original.parcel();
     let field_bytes = &parcel[FIELD_OFFSET..parcel.len()];
-    let constructed = TransferOfferPacket::construct_packet(field_bytes).expect("Failed to construct FileInfoPacket packet");
+    let constructed = FileOfferPacket::construct_packet(field_bytes).expect("Failed to construct FileInfoPacket packet");
     assert_eq!(original.file_size, constructed.file_size);
     assert_eq!(original.file_name, constructed.file_name);
 }

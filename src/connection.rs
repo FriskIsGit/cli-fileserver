@@ -33,6 +33,12 @@ pub fn receive_connection_at_port(address: &str, port: u16) -> Result<TcpStream>
     listener.incoming().next().unwrap()
 }
 
+pub fn create_server(address: &str, port: u16) -> TcpListener {
+    let full_address = &format!("{address}:{port}");
+    // Binding with timeout?
+    TcpListener::bind(full_address).expect("Failed to create server - address invalid")
+}
+
 fn create_ipv4_socket(address: &str, port: u16) -> SocketAddr {
     let octets = ipv4_address_to_byte_vec(address);
     let ipv4 = Ipv4Addr::from(octets);
@@ -44,7 +50,6 @@ pub fn ipv4_address_to_byte_vec(address: &str) -> [u8; 4] {
     let components = address.split('.');
     let mut i = 0;
     for comp in components {
-        println!("comp {:?}", comp);
         let Ok(byte) = comp.parse::<u8>() else {
             panic!("Error: The address {address} is invalid")
         };
