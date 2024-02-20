@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use crate::args::{CONNECT, ProgramArgs, SERVER};
+use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
 use crate::packet::{FIELD_OFFSET, TransferOfferPacket, FilePacket, Packet, AnswerPacket};
 
@@ -15,7 +15,7 @@ fn main() {
     let mut config = Config::read_config();
     config.assign_defaults();
     // fileserver -> fs
-    // SETUP: fileserver server / fileserver connect
+    // SETUP: fileserver host / fileserver connect
     // EXCHANGE: share path / accept (id)
     let program_args = ProgramArgs::retrieve();
     if !program_args.has_args() {
@@ -23,7 +23,7 @@ fn main() {
         return;
     }
     match program_args.args[0].as_str() {
-        SERVER => server_impl(config.host_port.unwrap()),
+        HOST => server_impl(config.host_port.unwrap()),
         CONNECT => client_impl(config.client_port.unwrap()),
         _ => {}
     }

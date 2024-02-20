@@ -1,5 +1,5 @@
 
-pub const SERVER: &str = "host";
+pub const HOST: &str = "host";
 pub const CONNECT: &str = "connect";
 
 // parse program specific arguments like flags
@@ -28,8 +28,8 @@ impl ProgramArgs {
         self.args.len() > 0
     }
     pub fn print_info() {
-        println!("Specify server or client:");
-        println!("{SERVER}");
-        println!("{CONNECT}")
+        println!("No arguments provided");
+        println!("{HOST} - listen for a connection");
+        println!("{CONNECT} - initiate a connection");
     }
 }
