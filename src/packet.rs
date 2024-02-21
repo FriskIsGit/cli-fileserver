@@ -25,7 +25,7 @@ pub trait Packet {
     // The buffer is always big enough to contain declared length
     fn parcel_fields(&self, field_bytes: &mut [u8]);
 
-    // This parcels the entire packet according to the format
+    // Instead of allocating each packet should write itself to the stream without allocating
     fn parcel(&self) -> Vec<u8> {
         let content_size = self.size();
         let mut all_data = vec![0u8; FIELD_OFFSET + content_size as usize];
@@ -164,7 +164,7 @@ impl Packet for FilePacket {
     }
 }
 
-// ANSWER PACKET (respond to query)
+// Use to respond to query
 pub struct AnswerPacket {
     pub yes: bool
 }
@@ -198,5 +198,41 @@ impl Packet for AnswerPacket {
 
     fn parcel_fields(&self, field_bytes: &mut [u8]) {
         field_bytes[0] = if self.yes { 1 } else { 0 }
+    }
+}
+
+// Used for testing purposes
+pub struct SpeedPacket {
+    pub random_bytes: Vec<u8>
+}
+impl SpeedPacket {
+    pub const ID: u32 = 400_000;
+    pub fn new(random_bytes: Vec<u8>) -> Self {
+        Self { random_bytes }
+    }
+}
+
+impl Packet for SpeedPacket {
+    fn id(&self) -> u32 {
+        SpeedPacket::ID
+    }
+
+    fn size(&self) -> u32 {
+        self.random_bytes.len() as u32
+    }
+
+    fn construct_packet(field_bytes: &[u8]) -> Result<Self, String> where Self: Sized {
+        let length = field_bytes.len();
+        if length == 0 {
+            return Err(format!("Packet has {length} bytes but at least 1 was expected"));
+        }
+        Ok(Self::new(field_bytes.to_vec()))
+    }
+
+    fn parcel_fields(&self, field_bytes: &mut [u8]) {
+        let bytes = &self.random_bytes;
+        for i in 0..bytes.len() {
+            field_bytes[i] = bytes[i]
+        }
     }
 }

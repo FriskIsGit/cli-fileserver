@@ -1,4 +1,4 @@
-use crate::packet::{FIELD_OFFSET, FileOfferPacket, FilePacket, Packet, AnswerPacket};
+use crate::packet::{FIELD_OFFSET, FileOfferPacket, FilePacket, Packet, AnswerPacket, SpeedPacket};
 
 #[test]
 fn file_packet_test() {
@@ -34,4 +34,12 @@ fn response_packet_test() {
     let false_constructed = AnswerPacket::construct_packet(false_field_byte).expect("Failed to construct FileInfoPacket packet");
     assert_eq!(original_true.yes(), true_constructed.yes());
     assert_eq!(original_false.yes(), false_constructed.yes());
+}
+#[test]
+fn speed_packet_test() {
+    let original = SpeedPacket::new(vec![1,2,3,4,5,6]);
+    let parcel = original.parcel();
+    let field_bytes = &parcel[FIELD_OFFSET..parcel.len()];
+    let constructed = SpeedPacket::construct_packet(field_bytes).expect("Failed to construct SpeedPacket packet");
+    assert_eq!(original.random_bytes, constructed.random_bytes);
 }

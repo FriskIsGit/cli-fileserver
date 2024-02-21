@@ -1,8 +1,9 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
+use std::time::Instant;
 use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
-use crate::packet::{FIELD_OFFSET, FileOfferPacket, FilePacket, Packet, AnswerPacket};
+use crate::packet::{FIELD_OFFSET, FileOfferPacket, FilePacket, Packet, AnswerPacket, SpeedPacket};
 
 mod connection;
 mod config;
@@ -79,9 +80,11 @@ fn server_impl(config: Config) {
 
 }
 
+const ALL_SPEED_PACKETS: usize = 400;
+const MB_1: usize = 1048576;
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
-        println!("[shutdown, send <count>, receive <count>]");
+        println!("[shutdown, send <count>, receive <count>, speedtest in, speedtest out]");
         let line = read_line();
         let command = line.as_str();
         println!("[{command}]");
@@ -98,10 +101,37 @@ fn established_connection_stage(mut stream: TcpStream) {
         } else if command.starts_with("receive") {
             let whitespace = command.find(' ').unwrap();
             let count = command[whitespace + 1..command.len()].parse::<usize>().unwrap();
-            println!("COUNT {count}");
             for _ in 0..count {
                 read_and_handle_packet(&mut stream);
             }
+        } else if command.starts_with("speedtest in") {
+            let start = Instant::now();
+            for _ in 0..ALL_SPEED_PACKETS {
+                read_and_handle_packet(&mut stream);
+            }
+            let elapsed = start.elapsed();
+            let megabytes = ALL_SPEED_PACKETS as f64;
+            let seconds = elapsed.as_secs() as f64;
+            println!("Time taken: {:?}", elapsed);
+            println!("Speed: {:.2} MB/s", megabytes/seconds);
+        } else if command.starts_with("speedtest out") {
+            println!("Preparing..");
+            let mut speed_packets: Vec<SpeedPacket> = vec![];
+            for _ in 0..ALL_SPEED_PACKETS {
+                let payload = vec![0u8; MB_1];
+                let packet = SpeedPacket::new(payload);
+                speed_packets.push(packet);
+            }
+            println!("Starting..");
+            let start = Instant::now();
+            for i in 0..ALL_SPEED_PACKETS {
+                stream.write(&speed_packets[i].parcel()).unwrap();
+            };
+            let elapsed = start.elapsed();
+            let megabytes = ALL_SPEED_PACKETS as f64;
+            let seconds = elapsed.as_secs() as f64;
+            println!("Time taken: {:?}", elapsed);
+            println!("Speed: {:.2} MB/s", megabytes/seconds);
         }
     }
 
@@ -161,6 +191,15 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                 Ok(packet) => {
                     println!("AnswerPacket {}", packet.yes)
                 }
+                Err(err) => {
+                    eprintln!("Failure {err}");
+                }
+            }
+        }
+        SpeedPacket::ID => {
+            let construct_res = SpeedPacket::construct_packet(&field_buffer);
+            match construct_res {
+                Ok(packet) => {}
                 Err(err) => {
                     eprintln!("Failure {err}");
                 }
