@@ -80,7 +80,7 @@ fn server_impl(config: Config) {
 
 }
 
-const ALL_SPEED_PACKETS: usize = 400;
+const SPEEDTEST_TRANSFERS: usize = 3000;
 const MB_1: usize = 1048576;
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
@@ -106,29 +106,28 @@ fn established_connection_stage(mut stream: TcpStream) {
             }
         } else if command.starts_with("speedtest in") {
             let start = Instant::now();
-            for _ in 0..ALL_SPEED_PACKETS {
+            for _ in 0..SPEEDTEST_TRANSFERS {
                 read_and_handle_packet(&mut stream);
             }
             let elapsed = start.elapsed();
-            let megabytes = ALL_SPEED_PACKETS as f64;
+            let megabytes = SPEEDTEST_TRANSFERS as f64;
             let seconds = elapsed.as_secs() as f64;
             println!("Time taken: {:?}", elapsed);
             println!("Speed: {:.2} MB/s", megabytes/seconds);
         } else if command.starts_with("speedtest out") {
-            println!("Preparing..");
-            let mut speed_packets: Vec<SpeedPacket> = vec![];
-            for _ in 0..ALL_SPEED_PACKETS {
-                let payload = vec![0u8; MB_1];
-                let packet = SpeedPacket::new(payload);
-                speed_packets.push(packet);
+            println!("Preparing to send {SPEEDTEST_TRANSFERS} packets of size = {MB_1}");
+            let mut payload = vec![0u8; MB_1];
+            for i in 0..MB_1 {
+                payload[i] = i as u8;
             }
+            let bytes = SpeedPacket::new(payload).parcel();
             println!("Starting..");
             let start = Instant::now();
-            for i in 0..ALL_SPEED_PACKETS {
-                stream.write(&speed_packets[i].parcel()).unwrap();
+            for _ in 0..SPEEDTEST_TRANSFERS {
+                stream.write(&bytes).unwrap();
             };
             let elapsed = start.elapsed();
-            let megabytes = ALL_SPEED_PACKETS as f64;
+            let megabytes = SPEEDTEST_TRANSFERS as f64;
             let seconds = elapsed.as_secs() as f64;
             println!("Time taken: {:?}", elapsed);
             println!("Speed: {:.2} MB/s", megabytes/seconds);
