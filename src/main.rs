@@ -58,12 +58,14 @@ fn server_impl(config: Config) {
         match incoming_conn {
             Ok(stream) => {
                 let ip = stream.peer_addr().unwrap().ip();
-                println!("Do you want to accept connection from: {} (y/n)", ip);
-                let response = read_line();
-                if !auto_accept && !response.starts_with('y') {
-                    let _ = stream.shutdown(Shutdown::Both);
-                    continue
+                if !auto_accept {
+                    println!("Do you want to accept connection from: {} (y/n)", ip);
+                    if !read_line().starts_with('y') {
+                        let _ = stream.shutdown(Shutdown::Both);
+                        continue
+                    }
                 }
+
                 let peer_addr = stream.peer_addr().unwrap().ip();
                 println!("Connected to {peer_addr}!");
                 established_connection_stage(stream);
