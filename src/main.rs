@@ -197,13 +197,7 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
             }
         }
         SpeedPacket::ID => {
-            let construct_res = SpeedPacket::construct_packet(&field_buffer);
-            match construct_res {
-                Ok(packet) => {}
-                Err(err) => {
-                    eprintln!("Failure {err}");
-                }
-            }
+            // don't construct packet - waste of time
         }
         _ => {
             println!("Unrecognized packet {id}");
