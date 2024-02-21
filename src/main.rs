@@ -80,7 +80,7 @@ fn server_impl(config: Config) {
 
 }
 
-const SPEEDTEST_TRANSFERS: usize = 3000;
+const SPEEDTEST_TRANSFERS: usize = 100;
 const MB_1: usize = 1048576;
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
@@ -105,13 +105,17 @@ fn established_connection_stage(mut stream: TcpStream) {
                 read_and_handle_packet(&mut stream);
             }
         } else if command.starts_with("speedtest in") {
-            let start = Instant::now();
-            for _ in 0..SPEEDTEST_TRANSFERS {
+            let mut start = Instant::now();
+            for i in 0..SPEEDTEST_TRANSFERS {
                 read_and_handle_packet(&mut stream);
+                let elapsed = start.elapsed();
+                let megabytes = (i + 1) as f64;
+                let seconds = elapsed.as_millis() as f64 / 1000f64;
+                println!("Received {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i+1, megabytes/seconds);
             }
             let elapsed = start.elapsed();
             let megabytes = SPEEDTEST_TRANSFERS as f64;
-            let seconds = elapsed.as_secs() as f64;
+            let seconds = elapsed.as_millis() as f64 / 1000f64;
             println!("Time taken: {:?}", elapsed);
             println!("Speed: {:.2} MB/s", megabytes/seconds);
         } else if command.starts_with("speedtest out") {
@@ -123,12 +127,17 @@ fn established_connection_stage(mut stream: TcpStream) {
             let bytes = SpeedPacket::new(payload).parcel();
             println!("Starting..");
             let start = Instant::now();
-            for _ in 0..SPEEDTEST_TRANSFERS {
+            for i in 0..SPEEDTEST_TRANSFERS {
                 stream.write(&bytes).unwrap();
+
+                let elapsed = start.elapsed();
+                let megabytes = (i + 1) as f64;
+                let seconds = elapsed.as_millis() as f64 / 1000f64;
+                println!("Written {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i+1, megabytes/seconds);
             };
             let elapsed = start.elapsed();
             let megabytes = SPEEDTEST_TRANSFERS as f64;
-            let seconds = elapsed.as_secs() as f64;
+            let seconds = elapsed.as_millis() as f64 / 1000f64;
             println!("Time taken: {:?}", elapsed);
             println!("Speed: {:.2} MB/s", megabytes/seconds);
         }
