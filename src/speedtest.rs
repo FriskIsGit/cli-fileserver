@@ -5,7 +5,7 @@ use crate::read_and_handle_packet;
 
 // Now all parameters can be changed
 const SPEEDTEST_TRANSFERS: usize = 100;
-const SPEED_PACKET_SIZE: usize = KB_512;
+const SPEED_PACKET_SIZE: usize = MB_1;
 const WARMUP_PACKETS: usize = 3;
 
 const KB_125: usize = 128000;
