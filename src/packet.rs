@@ -10,7 +10,7 @@ PACKET STRUCTURE FORMAT:
     packet max size ~ 4.29 GB
 */
 
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 
 pub const FIELD_OFFSET: usize = 8;
@@ -42,7 +42,14 @@ pub fn tcp_write_safe(mut data: &[u8], stream: &mut TcpStream) {
                 }
                 data = &data[written..];
             }
-            Err(err) => eprintln!("Encountered error when writing socket: {err}")
+            Err(err) => {
+                let kind = err.kind();
+                eprintln!("Error \"{kind}\" occurred when writing to socket - {err}");
+                if kind != ErrorKind::Interrupted {
+                    // anything other than Interrupted is not salvageable
+                    return;
+                }
+            }
         }
     }
 }
@@ -93,7 +100,18 @@ impl FileOfferPacket {
             Err(e) => Err(e.to_string()),
         };
     }
+    pub fn format_size(&self) -> String {
+        let mut value = self.file_size as f64;
+        let mut unit_index = 0;
+        while value > 1024f64 {
+            value /= 1024f64;
+            unit_index += 1;
+        }
+        let unit = UNITS[unit_index];
+        return format!("{:.2}{unit}", value);
+    }
 }
+const UNITS: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
 
 impl Packet for FileOfferPacket {
     fn id(&self) -> u32 {

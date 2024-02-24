@@ -83,7 +83,7 @@ const MB_1: usize = 1048576;
 
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
-        println!("[shutdown, send <count>, receive <count>, speedtest in, speedtest out]");
+        println!("[shutdown, send <count>, read <count>, speedtest in, speedtest out]");
         let line = read_line();
         let command = line.as_str();
         println!("[{command}]");
@@ -91,14 +91,16 @@ fn established_connection_stage(mut stream: TcpStream) {
             let _ = stream.shutdown(Shutdown::Both);
             return;
         } else if command.starts_with("send") {
-            let whitespace = command.find(' ').unwrap();
-            let count = command[whitespace + 1..command.len()].parse::<usize>().unwrap();
+            let Some(whitespace) = command.find(' ') else {
+                continue
+            };
+            let count = command[whitespace + 1..].parse::<usize>().unwrap();
             for _ in 0..count {
-                let packet = FileOfferPacket::new(55555, "file1.txt".to_string());
+                let packet = FileOfferPacket::new(86242, "file1.txt".to_string());
                 packet.write_header(&mut stream);
                 packet.write(&mut stream);
             }
-        } else if command.starts_with("receive") {
+        } else if command.starts_with("read") {
             let whitespace = command.find(' ').unwrap();
             let count = command[whitespace + 1..].parse::<usize>().unwrap();
             for _ in 0..count {
@@ -158,28 +160,21 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
     packet::tcp_read_safe(&mut field_buffer, stream);
     match id {
         FileOfferPacket::ID => {
-            let construct_res = FileOfferPacket::construct(&field_buffer);
-            match construct_res {
+            match FileOfferPacket::construct(&field_buffer) {
                 Ok(packet) => {
-                    println!("TransferOfferPacket {} {}", packet.file_size, packet.file_name)
+                    println!("Download {}?  [{}]", packet.file_name, packet.format_size())
                 }
-                Err(err) => {
-                    eprintln!("Failure {err}");
-                }
+                Err(err) => eprintln!("Failure: {err}")
             }
         }
         FilePacket::ID => {
-            let construct_res = FilePacket::wrap(&field_buffer);
-            match construct_res {
+            match FilePacket::wrap(&field_buffer) {
                 Ok(packet) => {
                     println!("FilePacket {} {} {:?}", packet.chunk_id, packet.payload_size, packet.file_bytes)
                 }
-                Err(err) => {
-                    eprintln!("Failure {err}");
-                }
+                Err(err) => eprintln!("Failure: {err}")
             }
         }
-
         SpeedPacket::ID => {
             // don't construct packet - waste of time
         }
