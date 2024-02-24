@@ -15,6 +15,7 @@ pub fn speedtest_out(mut stream: &mut TcpStream) {
     }
     let packet = SpeedPacket::wrap(&payload).unwrap();
     println!("Starting..");
+    let test_start = Instant::now();
     let mut start = Instant::now();
     for i in 0..SPEEDTEST_TRANSFERS {
         if i == IGNORE_FIRST_COUNT {
@@ -33,10 +34,11 @@ pub fn speedtest_out(mut stream: &mut TcpStream) {
         let seconds = elapsed.as_millis() as f64 / 1000f64;
         println!("Written {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, megabytes / seconds);
     };
-    display_final_result(start)
+    display_final_result(test_start)
 }
 
 pub fn speedtest_in(mut stream: &mut TcpStream) {
+    let test_start = Instant::now();
     let mut start = Instant::now();
     for i in 0..SPEEDTEST_TRANSFERS {
         if i == IGNORE_FIRST_COUNT {
@@ -54,7 +56,7 @@ pub fn speedtest_in(mut stream: &mut TcpStream) {
         let seconds = elapsed.as_millis() as f64 / 1000f64;
         println!("Received {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, megabytes / seconds);
     }
-    display_final_result(start)
+    display_final_result(test_start)
 }
 
 pub fn display_final_result(start: Instant) {
