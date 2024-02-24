@@ -3,79 +3,78 @@ use std::time::Instant;
 use crate::packet::{Packet, SpeedPacket};
 use crate::read_and_handle_packet;
 
+// Now all parameters can be changed
 const SPEEDTEST_TRANSFERS: usize = 100;
-const IGNORE_FIRST_COUNT: usize = 5;
+const SPEED_PACKET_SIZE: usize = KB_512;
+const WARMUP_PACKETS: usize = 3;
+
+const KB_125: usize = 128000;
+const KB_512: usize = 524288; // diez are the most efficient?
 const MB_1: usize = 1048576;
+const MB_2: usize = 2097152;
 
 pub fn speedtest_out(mut stream: &mut TcpStream) {
-    println!("Preparing to send {SPEEDTEST_TRANSFERS} packets of size = {MB_1}");
-    let mut payload = vec![0u8; MB_1];
-    for i in 0..MB_1 {
+    let mut payload = vec![0u8; SPEED_PACKET_SIZE];
+    for i in 0..SPEED_PACKET_SIZE {
         payload[i] = i as u8;
     }
     let packet = SpeedPacket::wrap(&payload).unwrap();
-    println!("Starting..");
-    let mut avg = Average::new();
+    let megabytes_in_packet = SPEED_PACKET_SIZE as f64 / MB_1 as f64;
+    println!("megabytes_in_packet: {megabytes_in_packet}");
     let mut start = Instant::now();
-    for i in 0..SPEEDTEST_TRANSFERS {
-        if i == IGNORE_FIRST_COUNT {
-            start = Instant::now();
-        }
+    println!("Warming up with {WARMUP_PACKETS} packets");
+    for _ in 0..WARMUP_PACKETS {
+        packet.write_header(&mut stream);
+        packet.write(&mut stream);
+    }
+    let seconds = start.elapsed().as_secs_f64();
+    println!("Warmup time: {seconds:.2}s. Starting..");
+
+    start = Instant::now();
+    for i in 1..=SPEEDTEST_TRANSFERS {
 
         packet.write_header(&mut stream);
         packet.write(&mut stream);
 
-        if i < IGNORE_FIRST_COUNT {
-            continue
-        }
-
         let elapsed = start.elapsed();
-        let megabytes = (i + 1 - IGNORE_FIRST_COUNT) as f64;
         let seconds = elapsed.as_millis() as f64 / 1000f64;
-        let transfer = megabytes / seconds;
-        avg.add(transfer);
-        println!("Written {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, transfer);
+
+        let megabytes_transferred = i as f64 * megabytes_in_packet;
+
+        let speed = megabytes_transferred / seconds;
+        println!("Written {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i, speed);
     };
-    println!("Average speed {:.2} MB/s", avg.avg())
+    let seconds_elapsed = start.elapsed().as_secs_f64();
+
+    let megabytes_transferred = SPEEDTEST_TRANSFERS as f64 * megabytes_in_packet;
+    let speed = megabytes_transferred / seconds_elapsed;
+    println!("Upload speed = {speed:.2} MB/s");
 }
 
 pub fn speedtest_in(mut stream: &mut TcpStream) {
-    let mut avg = Average::new();
+    let megabytes_in_packet = SPEED_PACKET_SIZE as f64 / MB_1 as f64;
+    println!("megabytes_in_packet: {megabytes_in_packet}");
     let mut start = Instant::now();
-    for i in 0..SPEEDTEST_TRANSFERS {
-        if i == IGNORE_FIRST_COUNT {
-            start = Instant::now();
-        }
-
+    println!("Warming up with {WARMUP_PACKETS} packets");
+    for _ in 0..WARMUP_PACKETS {
         read_and_handle_packet(&mut stream);
+    }
+    let seconds = start.elapsed().as_secs_f64();
+    println!("Warmup time: {seconds:.2}s. Starting..");
 
-        if i < IGNORE_FIRST_COUNT {
-            continue
-        }
-
+    start = Instant::now();
+    for i in 1..=SPEEDTEST_TRANSFERS {
+        read_and_handle_packet(&mut stream);
         let elapsed = start.elapsed();
-        let megabytes = (i + 1 - IGNORE_FIRST_COUNT) as f64;
         let seconds = elapsed.as_millis() as f64 / 1000f64;
-        let transfer = megabytes / seconds;
-        avg.add(transfer);
-        println!("Received {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, transfer);
-    }
-    println!("Average speed {:.2} MB/s", avg.avg())
-}
 
-struct Average {
-    sum: f64,
-    count: usize
-}
-impl Average {
-    pub fn new() -> Self {
-        Self { sum: 0.0, count: 0 }
+        let megabytes_transferred = i as f64 * megabytes_in_packet;
+        let speed = megabytes_transferred / seconds;
+        println!("Received {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i, speed);
     }
-    pub fn add(&mut self, value: f64) {
-        self.sum += value;
-        self.count += 1;
-    }
-    pub fn avg(&self) -> f64 {
-        self.sum / self.count as f64
-    }
+    let seconds_elapsed = start.elapsed().as_secs_f64();
+
+    let megabytes_transferred = SPEEDTEST_TRANSFERS as f64 * megabytes_in_packet;
+    let speed = megabytes_transferred / seconds_elapsed;
+    println!("Download speed = {speed:.2} MB/s");
 }
