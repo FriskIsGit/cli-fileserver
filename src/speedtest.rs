@@ -15,7 +15,7 @@ pub fn speedtest_out(mut stream: &mut TcpStream) {
     }
     let packet = SpeedPacket::wrap(&payload).unwrap();
     println!("Starting..");
-    let test_start = Instant::now();
+    let mut avg = Average::new();
     let mut start = Instant::now();
     for i in 0..SPEEDTEST_TRANSFERS {
         if i == IGNORE_FIRST_COUNT {
@@ -32,13 +32,15 @@ pub fn speedtest_out(mut stream: &mut TcpStream) {
         let elapsed = start.elapsed();
         let megabytes = (i + 1 - IGNORE_FIRST_COUNT) as f64;
         let seconds = elapsed.as_millis() as f64 / 1000f64;
-        println!("Written {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, megabytes / seconds);
+        let transfer = megabytes / seconds;
+        avg.add(transfer);
+        println!("Written {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, transfer);
     };
-    display_final_result(test_start)
+    println!("Average speed {:.2} MB/s", avg.avg())
 }
 
 pub fn speedtest_in(mut stream: &mut TcpStream) {
-    let test_start = Instant::now();
+    let mut avg = Average::new();
     let mut start = Instant::now();
     for i in 0..SPEEDTEST_TRANSFERS {
         if i == IGNORE_FIRST_COUNT {
@@ -54,15 +56,26 @@ pub fn speedtest_in(mut stream: &mut TcpStream) {
         let elapsed = start.elapsed();
         let megabytes = (i + 1 - IGNORE_FIRST_COUNT) as f64;
         let seconds = elapsed.as_millis() as f64 / 1000f64;
-        println!("Received {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, megabytes / seconds);
+        let transfer = megabytes / seconds;
+        avg.add(transfer);
+        println!("Received {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, transfer);
     }
-    display_final_result(test_start)
+    println!("Average speed {:.2} MB/s", avg.avg())
 }
 
-pub fn display_final_result(start: Instant) {
-    let elapsed = start.elapsed();
-    let megabytes = SPEEDTEST_TRANSFERS as f64;
-    let seconds = elapsed.as_millis() as f64 / 1000f64;
-    println!("Time taken: {:?}", elapsed);
-    println!("Speed: {:.2} MB/s", megabytes / seconds);
+struct Average {
+    sum: f64,
+    count: usize
+}
+impl Average {
+    pub fn new() -> Self {
+        Self { sum: 0.0, count: 0 }
+    }
+    pub fn add(&mut self, value: f64) {
+        self.sum += value;
+        self.count += 1;
+    }
+    pub fn avg(&self) -> f64 {
+        self.sum / self.count as f64
+    }
 }
