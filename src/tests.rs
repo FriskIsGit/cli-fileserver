@@ -1,6 +1,9 @@
+use std::fs::File;
+use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::thread;
 use std::time::{Duration, Instant};
+use crate::file_operator::FileFeeder;
 use crate::packet;
 use crate::packet::{FileOfferPacket, FilePacket, Packet, SpeedPacket};
 
@@ -35,8 +38,8 @@ fn file_packet_test() {
         .expect("Failed to construct FilePacket packet");
 
     println!("Logic time: {:?}", start.elapsed());
+    assert_eq!(original_packet.transaction_id, wrapped_packet.transaction_id);
     assert_eq!(original_packet.chunk_id, wrapped_packet.chunk_id);
-    assert_eq!(original_packet.payload_size, wrapped_packet.payload_size);
     assert_eq!(original_packet.file_bytes, wrapped_packet.file_bytes);
     close_sockets(writer, reader);
 }
@@ -80,4 +83,24 @@ fn speed_packet_test() {
     println!("Logic time: {:?}", start.elapsed());
     assert_eq!(original.random_bytes, constructed.random_bytes);
     close_sockets(writer, reader);
+}
+
+#[test]
+fn file_test() {
+    let path = "Cargo.toml";
+    let mut orig_file = File::open(path).unwrap();
+    let length = orig_file.metadata().unwrap().len();
+    let mut orig_buffer = vec![0u8; length as usize];
+    orig_file.read_exact(&mut orig_buffer).unwrap();
+    drop(orig_file);
+
+    let mut feeder = FileFeeder::new(path).expect("Where is file?");
+    let mut feeder_buffer = vec![];
+    while feeder.has_next_chunk() {
+        match feeder.read_next_chunk() {
+            Ok(chunk) => feeder_buffer.extend_from_slice(chunk),
+            Err(err) => eprintln!("{err}")
+        }
+    }
+    assert_eq!(feeder_buffer, orig_buffer)
 }

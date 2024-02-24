@@ -130,30 +130,30 @@ impl Packet for FileOfferPacket {
 
 // FILE PACKET
 pub struct FilePacket<'r> {
+    pub transaction_id: u64,
     pub chunk_id: u64,
-    pub payload_size: u64,
     pub file_bytes: &'r [u8],
 }
 
 impl<'r> FilePacket<'r> {
     pub const ID: u32 = 200_000;
-    pub fn new(chunk_id: u64, payload_size: u64, content: &'r [u8]) -> Self {
-        Self { chunk_id, payload_size, file_bytes: content }
+    pub fn new(transaction_id: u64, chunk_id: u64, content: &'r [u8]) -> Self {
+        Self { transaction_id, chunk_id, file_bytes: content }
     }
     pub fn wrap(field_bytes: &'r [u8]) -> Result<Self, String> {
         let length = field_bytes.len();
         if length < 16 {
             return Err(format!("Packet has {length} bytes but 16 were expected"));
         }
-        let chunk_id_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
-        let chunk_id = u64::from_be_bytes(chunk_id_bytes);
+        let transaction_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
+        let transaction_id = u64::from_be_bytes(transaction_bytes);
 
-        let payload_id_bytes: [u8; 8] = field_bytes[8..16].try_into().unwrap();
-        let payload_size = u64::from_be_bytes(payload_id_bytes);
+        let chunk_id_bytes: [u8; 8] = field_bytes[8..16].try_into().unwrap();
+        let chunk_id = u64::from_be_bytes(chunk_id_bytes);
 
         let file_bytes = &field_bytes[16..length];
 
-        Ok(Self::new(chunk_id, payload_size, file_bytes))
+        Ok(Self::new(transaction_id, chunk_id, file_bytes))
     }
 }
 
@@ -167,8 +167,8 @@ impl<'r> Packet for FilePacket<'r> {
     }
 
     fn write(&self, stream: &mut TcpStream) {
+        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
         tcp_write_safe(&self.chunk_id.to_be_bytes(), stream);
-        tcp_write_safe(&self.payload_size.to_be_bytes(), stream);
         tcp_write_safe(&self.file_bytes, stream);
     }
 }

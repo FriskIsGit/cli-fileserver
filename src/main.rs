@@ -1,8 +1,10 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
+use std::path::Path;
 use std::time::{Duration};
 use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
+use crate::file_operator::FileFeeder;
 use crate::packet::{FileOfferPacket, FilePacket, Packet, SpeedPacket};
 use crate::speedtest::{speedtest_in, speedtest_out};
 
@@ -95,32 +97,32 @@ fn server_impl(config: Config) {
 
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
-        println!("[shutdown, send <count>, read <count>, speedtest in, speedtest out]");
+        println!("[shutdown, share <path>, read <count>, speedtest in, speedtest out]");
         let line = read_line();
         let command = line.as_str();
         println!("[{command}]");
         if command.starts_with("shutdown") {
             let _ = stream.shutdown(Shutdown::Both);
             return;
-        } else if command.starts_with("send") {
+        } else if command.starts_with("share") {
             let Some(whitespace) = command.find(' ') else {
                 continue
             };
-            let count = command[whitespace + 1..].parse::<usize>().unwrap();
-            for _ in 0..count {
-                let packet = FileOfferPacket::new(86242, "file1.txt".to_string());
-                packet.write_header(&mut stream);
-                packet.write(&mut stream);
+            let path = &command[whitespace + 1..];
+            if !Path::new(path).exists() {
+                eprintln!("File not found");
+                continue
             }
+            stream_file(path, &mut stream);
         } else if command.starts_with("read") {
             let whitespace = command.find(' ').unwrap();
             let count = command[whitespace + 1..].parse::<usize>().unwrap();
             for _ in 0..count {
                 read_and_handle_packet(&mut stream);
             }
-        } else if command.starts_with("speedtest in") {
+        } else if command.starts_with("speedtest in") || command.starts_with("si") {
             speedtest_in(&mut stream);
-        } else if command.starts_with("speedtest out") {
+        } else if command.starts_with("speedtest out") || command.starts_with("so") {
             speedtest_out(&mut stream);
         }
     }
@@ -149,7 +151,10 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
         FilePacket::ID => {
             match FilePacket::wrap(&field_buffer) {
                 Ok(packet) => {
-                    println!("FilePacket {} {} {:?}", packet.chunk_id, packet.payload_size, packet.file_bytes)
+                    let transaction_id = packet.transaction_id;
+                    let chunk = packet.chunk_id;
+                    let content_len = packet.file_bytes.len();
+                    println!("Transaction:{transaction_id} | File packet: chunk={chunk} content_len={content_len}")
                 }
                 Err(err) => eprintln!("Failure: {err}")
             }
@@ -170,4 +175,16 @@ fn read_line() -> String {
         Ok(_) => buffer.trim_end().to_string(),
         Err(_) => "".into(),
     };
+}
+
+fn stream_file(path: &str, stream: &mut TcpStream) {
+    let mut file_feeder = FileFeeder::new(path).expect("Couldn't initialize file reader");
+    let mut chunk_id = 0;
+    while file_feeder.has_next_chunk() {
+        let chunk = file_feeder.read_next_chunk().expect("No next chunk");
+        let packet = FilePacket::new(1, chunk_id, &chunk);
+        packet.write_header(stream);
+        packet.write(stream);
+        chunk_id += 1;
+    }
 }
