@@ -5,6 +5,8 @@ const HOST_ADDR: &str = "host";
 const HOST_PORT: &str = "host_port";
 const CONNECT_ADDR: &str = "connect";
 const CONNECT_PORT: &str = "connect_port";
+const WRITE_TIMEOUT: &str = "write_timeout";
+const READ_TIMEOUT: &str = "read_timeout";
 
 const CONFIG_NAME: &str = "config.txt";
 /**
@@ -23,6 +25,8 @@ pub struct Config {
     pub host_port: Option<u16>,
     pub connect_address: Option<String>,
     pub connect_port: Option<u16>,
+    pub write_timeout: Option<u32>,
+    pub read_timeout: Option<u32>,
     pub auto_accept: Option<bool>,
 }
 
@@ -33,6 +37,8 @@ impl Config {
             host_port: None,
             connect_address: None,
             connect_port: None,
+            write_timeout: None,
+            read_timeout: None,
             auto_accept: None,
         }
     }
@@ -48,27 +54,22 @@ impl Config {
 
         for line in content.lines() {
             let Some(equal_sign) = line.find('=') else {
-                continue
+                continue;
             };
             if equal_sign == line.len() - 1 {
-                continue
+                continue;
             }
             let key = &line[0..equal_sign];
-            let value_str = &line[equal_sign+1..];
-            if key == HOST_ADDR {
-                config.host_address = Some(value_str.to_string());
-            }
-            else if key == CONNECT_ADDR {
-                config.connect_address = Some(value_str.to_string());
-            }
-            else if key == HOST_PORT {
-                config.host_port = Some(value_str.parse::<u16>().unwrap());
-            }
-            else if key == CONNECT_PORT {
-                config.connect_port = Some(value_str.parse::<u16>().unwrap());
-            }
-            else if key == HOST_AUTO_ACCEPT {
-                config.auto_accept = Some(value_str.parse::<bool>().unwrap());
+            let value_str = &line[equal_sign + 1..];
+            match key {
+                HOST_ADDR => config.host_address = Some(value_str.to_string()),
+                CONNECT_ADDR => config.connect_address = Some(value_str.to_string()),
+                HOST_PORT => config.host_port = Some(value_str.parse::<u16>().unwrap()),
+                CONNECT_PORT => config.connect_port = Some(value_str.parse::<u16>().unwrap()),
+                HOST_AUTO_ACCEPT => config.auto_accept = Some(value_str.parse::<bool>().unwrap()),
+                READ_TIMEOUT => config.read_timeout = Some(value_str.parse::<u32>().unwrap()),
+                WRITE_TIMEOUT => config.write_timeout = Some(value_str.parse::<u32>().unwrap()),
+                _ => {}
             }
         }
         config
@@ -88,6 +89,12 @@ impl Config {
         }
         if self.auto_accept.is_none() {
             self.auto_accept = Some(false)
+        }
+        if self.write_timeout.is_none() {
+            self.write_timeout = Some(60)
+        }
+        if self.read_timeout.is_none() {
+            self.read_timeout = Some(60)
         }
     }
 }

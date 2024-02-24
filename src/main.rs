@@ -1,9 +1,10 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
-use std::time::Instant;
+use std::time::{Duration};
 use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
 use crate::packet::{FileOfferPacket, FilePacket, Packet, SpeedPacket};
+use crate::speedtest::{speedtest_in, speedtest_out};
 
 mod connection;
 mod config;
@@ -11,6 +12,7 @@ mod file_operator;
 mod packet;
 mod args;
 mod tests;
+mod speedtest;
 
 fn main() {
     let mut config = Config::read_config();
@@ -33,21 +35,33 @@ fn main() {
 
 fn client_impl(config: Config) {
     println!("Attempting connection");
-    let connect_to = &config.connect_address.unwrap();
+    let target_address = config.connect_address.as_ref().unwrap();
     let port = config.connect_port.unwrap();
-    let connection_res = connection::connect_ipv4(connect_to, port);
+    let connection_res = connection::connect_ipv4(target_address, port);
     let Ok(mut stream) = connection_res else {
         eprintln!("Failed to connect: {}", connection_res.unwrap_err());
         return;
     };
     let peer_addr = stream.peer_addr().unwrap().ip();
     println!("Connected to {peer_addr}!");
+    apply_config_to_tcp(&config, &mut stream);
     established_connection_stage(stream);
+}
+
+fn apply_config_to_tcp(config: &Config, stream: &mut TcpStream) {
+    if let Some(seconds) = config.write_timeout {
+        let timeout = Some(Duration::from_secs(seconds as u64));
+        let _ = stream.set_write_timeout(timeout);
+    }
+    if let Some(seconds) = config.read_timeout {
+        let timeout = Some(Duration::from_secs(seconds as u64));
+        let _ = stream.set_read_timeout(timeout);
+    }
 }
 
 fn server_impl(config: Config) {
     println!("Running server");
-    let host_address = &config.host_address.unwrap();
+    let host_address = config.host_address.as_ref().unwrap();
     let port = config.host_port.unwrap();
     let listener = connection::create_server(host_address, port);
     let port = listener.local_addr().unwrap().port();
@@ -57,7 +71,7 @@ fn server_impl(config: Config) {
     // Connection listener implementation
     for incoming_conn in listener.incoming() {
         match incoming_conn {
-            Ok(stream) => {
+            Ok(mut stream) => {
                 let ip = stream.peer_addr().unwrap().ip();
                 if !auto_accept {
                     println!("Do you want to accept connection from: {} (y/n)", ip);
@@ -68,6 +82,7 @@ fn server_impl(config: Config) {
                 }
                 let peer_addr = stream.peer_addr().unwrap().ip();
                 println!("Connected to {peer_addr}!");
+                apply_config_to_tcp(&config, &mut stream);
                 established_connection_stage(stream);
             }
             Err(err) => {
@@ -77,9 +92,6 @@ fn server_impl(config: Config) {
         };
     };
 }
-
-const SPEEDTEST_TRANSFERS: usize = 100;
-const MB_1: usize = 1048576;
 
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
@@ -107,42 +119,9 @@ fn established_connection_stage(mut stream: TcpStream) {
                 read_and_handle_packet(&mut stream);
             }
         } else if command.starts_with("speedtest in") {
-            let mut start = Instant::now();
-            for i in 0..SPEEDTEST_TRANSFERS {
-                read_and_handle_packet(&mut stream);
-                let elapsed = start.elapsed();
-                let megabytes = (i + 1) as f64;
-                let seconds = elapsed.as_millis() as f64 / 1000f64;
-                println!("Received {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, megabytes / seconds);
-            }
-            let elapsed = start.elapsed();
-            let megabytes = SPEEDTEST_TRANSFERS as f64;
-            let seconds = elapsed.as_millis() as f64 / 1000f64;
-            println!("Time taken: {:?}", elapsed);
-            println!("Speed: {:.2} MB/s", megabytes / seconds);
+            speedtest_in(&mut stream);
         } else if command.starts_with("speedtest out") {
-            println!("Preparing to send {SPEEDTEST_TRANSFERS} packets of size = {MB_1}");
-            let mut payload = vec![0u8; MB_1];
-            for i in 0..MB_1 {
-                payload[i] = i as u8;
-            }
-            let packet = SpeedPacket::wrap(&payload).unwrap();
-            println!("Starting..");
-            let start = Instant::now();
-            for i in 0..SPEEDTEST_TRANSFERS {
-                packet.write_header(&mut stream);
-                packet.write(&mut stream);
-
-                let elapsed = start.elapsed();
-                let megabytes = (i + 1) as f64;
-                let seconds = elapsed.as_millis() as f64 / 1000f64;
-                println!("Written {}/{SPEEDTEST_TRANSFERS} packets ({:.2} MB/s)", i + 1, megabytes / seconds);
-            };
-            let elapsed = start.elapsed();
-            let megabytes = SPEEDTEST_TRANSFERS as f64;
-            let seconds = elapsed.as_millis() as f64 / 1000f64;
-            println!("Time taken: {:?}", elapsed);
-            println!("Speed: {:.2} MB/s", megabytes / seconds);
+            speedtest_out(&mut stream);
         }
     }
 }

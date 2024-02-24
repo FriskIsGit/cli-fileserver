@@ -9,3 +9,5 @@ CONNECT CONFIGURATION:
 connect=127.0.0.1
 connect_port=12345
 =====================
+write_timeout = 5
+read_timeout = 5
