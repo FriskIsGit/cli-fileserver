@@ -98,7 +98,7 @@ fn server_impl(config: Config) {
 
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
-        println!("[shutdown, ping st, ping en, share <path>, read <count>, speedtest in, speedtest out]");
+        println!("[shutdown, ping 1, ping 2, share <path>, read <count>, speedtest in, speedtest out]");
         let line = read_line();
         let command = line.as_str();
         println!("[{command}]");
