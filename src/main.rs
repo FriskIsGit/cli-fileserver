@@ -131,7 +131,7 @@ fn established_connection_stage(mut stream: TcpStream) {
                 write_ping(&mut stream);
                 read_ping(&mut stream);
                 let end = ping_start.elapsed();
-                println!("W/R: {end}");
+                println!("W/R: {:?}", end);
             }
         } else if command.starts_with("ping 2") {
             for _ in 0..PINGS {
@@ -139,7 +139,7 @@ fn established_connection_stage(mut stream: TcpStream) {
                 read_ping(&mut stream);
                 write_ping(&mut stream);
                 let end = ping_start.elapsed();
-                println!("W/R: {end}");
+                println!("W/R: {:?}", end);
             }
         }
     }
