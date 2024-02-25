@@ -12,6 +12,7 @@ PACKET STRUCTURE FORMAT:
 
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
+use std::time::{Instant, SystemTime};
 
 pub const FIELD_OFFSET: usize = 8;
 
@@ -68,12 +69,16 @@ pub fn tcp_read_safe(mut buffer: &mut [u8], stream: &mut TcpStream) {
     }
 }
 
-pub fn read_id(id_bytes: [u8; 4]) -> u32 {
+pub fn read_id(stream: &mut TcpStream) -> u32 {
+    let mut id_bytes = [0u8; 4];
+    tcp_read_safe(&mut id_bytes, stream);
     u32::from_be_bytes(id_bytes)
 }
 
-pub fn read_content_size(packet_size: [u8; 4]) -> u32 {
-    u32::from_be_bytes(packet_size)
+pub fn read_content_size(stream: &mut TcpStream) -> u32 {
+    let mut size_bytes = [0u8; 4];
+    tcp_read_safe(&mut size_bytes, stream);
+    u32::from_be_bytes(size_bytes)
 }
 
 // PACKET STRUCT IMPLEMENTATIONS
@@ -180,7 +185,7 @@ pub struct SpeedPacket<'r> {
 }
 
 impl<'r> SpeedPacket<'r> {
-    pub const ID: u32 = 400_000;
+    pub const ID: u32 = 300_000;
     pub fn new(random_bytes: &'r [u8]) -> Self {
         Self { random_bytes }
     }
@@ -200,5 +205,69 @@ impl<'r> Packet for SpeedPacket<'r> {
 
     fn write(&self, stream: &mut TcpStream) {
         tcp_write_safe(&self.random_bytes, stream);
+    }
+}
+
+// Used for testing purposes
+pub struct SpeedtestInfoPacket {
+    pub start_time: u64, // future unix time - the moment reading and writing should commence
+}
+
+impl SpeedtestInfoPacket {
+    pub const ID: u32 = 400_000;
+    pub fn new_with_start(start: u64) -> Self {
+        Self { start_time: start }
+    }
+    pub fn get_start_time(field_bytes: &[u8]) -> u64 {
+        let unix_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
+        u64::from_be_bytes(unix_bytes)
+    }
+}
+
+impl Packet for SpeedtestInfoPacket{
+    fn id(&self) -> u32 {
+        SpeedtestInfoPacket::ID
+    }
+    fn size(&self) -> u32 {
+        8u32
+    }
+    fn write(&self, stream: &mut TcpStream) {
+        tcp_write_safe(&self.start_time.to_be_bytes(), stream);
+    }
+}
+
+pub fn epoch_time_now() -> u64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH).unwrap()
+        .as_millis() as u64
+}
+
+pub struct PingPacket {
+    pub creation_time: u64, // unix time the moment packet is made
+}
+impl PingPacket {
+    pub const ID: u32 = 500_000;
+    pub fn new_ping() -> Self {
+        Self { creation_time: epoch_time_now() }
+    }
+
+    pub fn millis_taken(field_bytes: &[u8]) -> u64 {
+        let now = epoch_time_now();
+        let unix_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
+        let time_sent = u64::from_be_bytes(unix_bytes);
+        now - time_sent
+    }
+}
+impl Packet for PingPacket {
+    fn id(&self) -> u32 {
+        PingPacket::ID
+    }
+
+    fn size(&self) -> u32 {
+        8u32
+    }
+
+    fn write(&self, stream: &mut TcpStream) {
+        tcp_write_safe(&self.creation_time.to_be_bytes(), stream);
     }
 }

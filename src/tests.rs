@@ -5,7 +5,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use crate::file_operator::FileFeeder;
 use crate::packet;
-use crate::packet::{FileOfferPacket, FilePacket, Packet, SpeedPacket};
+use crate::packet::{FileOfferPacket, FilePacket, Packet, PingPacket, SpeedPacket};
 
 fn new_tcp_connection(port: u16) -> (TcpStream, TcpStream) {
     let addr = format!("127.0.0.1:{port}");
@@ -82,6 +82,26 @@ fn speed_packet_test() {
     let constructed = SpeedPacket::wrap(&buffer).expect("Failed to construct SpeedPacket packet");
     println!("Logic time: {:?}", start.elapsed());
     assert_eq!(original.random_bytes, constructed.random_bytes);
+    close_sockets(writer, reader);
+}
+
+#[test]
+fn ping_packet_test() {
+    let (mut writer, mut reader) = new_tcp_connection(39995);
+    let ping = PingPacket::new_ping();
+    ping.write_header(&mut writer);
+    ping.write(&mut writer);
+
+    let id = packet::read_id(&mut reader);
+    if id != PingPacket::ID {
+        assert!(false)
+    }
+    let content_size = packet::read_content_size(&mut reader);
+
+    let field_bytes = vec![0u8; content_size as usize];
+
+    let ping_received = PingPacket::millis_taken(&field_bytes);
+    assert!(ping_received >= 0);
     close_sockets(writer, reader);
 }
 

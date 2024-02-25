@@ -5,7 +5,7 @@ use std::time::{Duration};
 use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
 use crate::file_operator::FileFeeder;
-use crate::packet::{FileOfferPacket, FilePacket, Packet, SpeedPacket};
+use crate::packet::{FileOfferPacket, FilePacket, Packet, PingPacket, SpeedPacket, tcp_write_safe};
 use crate::speedtest::{speedtest_in, speedtest_out};
 
 mod connection;
@@ -97,7 +97,7 @@ fn server_impl(config: Config) {
 
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
-        println!("[shutdown, share <path>, read <count>, speedtest in, speedtest out]");
+        println!("[shutdown, ping, share <path>, read <count>, speedtest in, speedtest out]");
         let line = read_line();
         let command = line.as_str();
         println!("[{command}]");
@@ -124,18 +124,17 @@ fn established_connection_stage(mut stream: TcpStream) {
             speedtest_in(&mut stream);
         } else if command.starts_with("speedtest out") || command.starts_with("so") {
             speedtest_out(&mut stream);
+        } else if command.starts_with("ping") {
+            let ping = PingPacket::new_ping();
+            ping.write_header(&mut stream);
+            ping.write(&mut stream);
         }
     }
 }
 
 fn read_and_handle_packet(stream: &mut TcpStream) {
-    let mut id = [0u8; 4];
-    packet::tcp_read_safe(&mut id, stream);
-    let id = packet::read_id(id);
-
-    let mut packet_size = [0u8; 4];
-    packet::tcp_read_safe(&mut packet_size, stream);
-    let packet_size = packet::read_content_size(packet_size);
+    let id = packet::read_id(stream);
+    let packet_size = packet::read_content_size(stream);
 
     let mut field_buffer = vec![0u8; packet_size as usize];
     packet::tcp_read_safe(&mut field_buffer, stream);
@@ -158,6 +157,10 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                 }
                 Err(err) => eprintln!("Failure: {err}")
             }
+        }
+        PingPacket::ID => {
+            let taken = PingPacket::millis_taken(&field_buffer);
+            println!("Ping received after {taken}ms");
         }
         SpeedPacket::ID => {
             // don't construct packet - waste of time
