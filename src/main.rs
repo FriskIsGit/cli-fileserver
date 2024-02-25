@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::path::Path;
-use std::time::{Duration};
+use std::time::{Duration, Instant};
 use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
 use crate::file_operator::FileFeeder;
@@ -16,6 +16,7 @@ mod args;
 mod tests;
 mod speedtest;
 
+const PINGS: usize = 100;
 fn main() {
     let mut config = Config::read_config();
     config.assign_defaults();
@@ -97,7 +98,7 @@ fn server_impl(config: Config) {
 
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
-        println!("[shutdown, ping, share <path>, read <count>, speedtest in, speedtest out]");
+        println!("[shutdown, ping st, ping en, share <path>, read <count>, speedtest in, speedtest out]");
         let line = read_line();
         let command = line.as_str();
         println!("[{command}]");
@@ -124,10 +125,22 @@ fn established_connection_stage(mut stream: TcpStream) {
             speedtest_in(&mut stream);
         } else if command.starts_with("speedtest out") || command.starts_with("so") {
             speedtest_out(&mut stream);
-        } else if command.starts_with("ping") {
-            let ping = PingPacket::new_ping();
-            ping.write_header(&mut stream);
-            ping.write(&mut stream);
+        } else if command.starts_with("ping 1") {
+            for _ in 0..PINGS {
+                let ping_start = Instant::now();
+                write_ping(&mut stream);
+                read_ping(&mut stream);
+                let end = ping_start.elapsed();
+                println!("W/R: {end}");
+            }
+        } else if command.starts_with("ping 2") {
+            for _ in 0..PINGS {
+                let ping_start = Instant::now();
+                read_ping(&mut stream);
+                write_ping(&mut stream);
+                let end = ping_start.elapsed();
+                println!("W/R: {end}");
+            }
         }
     }
 }
@@ -190,4 +203,21 @@ fn stream_file(path: &str, stream: &mut TcpStream) {
         packet.write(stream);
         chunk_id += 1;
     }
+}
+
+pub fn write_ping(stream: &mut TcpStream) {
+    let ping = PingPacket::new_ping();
+    ping.write_header(stream);
+    ping.write(stream);
+}
+
+fn read_ping(stream: &mut TcpStream) {
+    let id = packet::read_id(stream);
+    let packet_size = packet::read_content_size(stream);
+
+    if id != PingPacket::ID {
+        eprintln!("ID {id} wasn't expected at this time");
+    }
+    let mut field_buffer = vec![0u8; packet_size as usize];
+    packet::tcp_read_safe(&mut field_buffer, stream)
 }
