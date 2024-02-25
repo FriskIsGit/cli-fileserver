@@ -1,4 +1,5 @@
 use std::net::TcpStream;
+use std::ops::{Add, Sub};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use crate::packet::{Packet, PingPacket, SpeedPacket, SpeedtestInfoPacket};
@@ -23,14 +24,17 @@ pub fn speedtest_out(mut stream: &mut TcpStream) {
 
     println!("Pinging peer..");
     write_ping(stream);
-    let ping = read_ping(stream);
-    println!("Ping: {ping}ms");
+    read_ping(stream);
+    let ping_start = Instant::now();
     write_ping(stream);
+    read_ping(stream);
+    let elapsed = ping_start.elapsed();
+    let ping = elapsed.checked_div(2).unwrap();
+    println!("Ping: {:?}", ping);
 
-    let future = read_test_start(stream);
-    let until_start = Duration::from_millis(future - packet::epoch_time_now());
-    sleep(until_start);
-    println!("Woke up at: {}", packet::epoch_time_now());
+    let _ = read_test_start(stream);
+    // begin instantly, peer will sleep for the ping duration
+
     let start = Instant::now();
     for i in 1..=SPEEDTEST_TRANSFERS {
         packet.write_header(&mut stream);
@@ -57,15 +61,18 @@ pub fn speedtest_in(mut stream: &mut TcpStream) {
 
     println!("Awaiting ping..");
     let _ = read_ping(stream);
+    let ping_start = Instant::now();
     write_ping(stream);
-    let ping = read_ping(stream);
-    println!("Ping: {ping}ms");
-    let future = packet::epoch_time_now() + ping + 500;
-    write_test_start(stream, future);
+    read_ping(stream);
+    let elapsed = ping_start.elapsed();
+    write_ping(stream);
+    let ping = elapsed.checked_div(2).unwrap();
+    println!("Ping: {:?}", ping);
 
-    let until_start = Duration::from_millis(future - packet::epoch_time_now());
-    sleep(until_start);
-    println!("Woke up at: {}", packet::epoch_time_now());
+    let future = packet::epoch_time_now() + 300;
+    write_test_start(stream, future);
+    sleep(ping);
+
     let start = Instant::now();
     for i in 1..=SPEEDTEST_TRANSFERS {
         read_and_handle_packet(&mut stream);
@@ -89,7 +96,7 @@ pub fn write_ping(stream: &mut TcpStream) {
     ping.write(stream);
 }
 
-fn read_ping(stream: &mut TcpStream) -> u64 {
+fn read_ping(stream: &mut TcpStream) -> i64 {
     let id = packet::read_id(stream);
     let packet_size = packet::read_content_size(stream);
 

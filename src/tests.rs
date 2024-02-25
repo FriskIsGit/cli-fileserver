@@ -124,3 +124,10 @@ fn file_test() {
     }
     assert_eq!(feeder_buffer, orig_buffer)
 }
+
+#[test]
+fn time() {
+    println!("{}", packet::epoch_time_now())
+}
+
+

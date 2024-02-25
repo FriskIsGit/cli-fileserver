@@ -251,10 +251,10 @@ impl PingPacket {
         Self { creation_time: epoch_time_now() }
     }
 
-    pub fn millis_taken(field_bytes: &[u8]) -> u64 {
-        let now = epoch_time_now();
+    pub fn millis_taken(field_bytes: &[u8]) -> i64 {
+        let now = epoch_time_now() as i64;
         let unix_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
-        let time_sent = u64::from_be_bytes(unix_bytes);
+        let time_sent = u64::from_be_bytes(unix_bytes) as i64;
         now - time_sent
     }
 }
