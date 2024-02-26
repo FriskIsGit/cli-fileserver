@@ -50,6 +50,7 @@ pub fn speedtest_out(mut stream: &mut TcpStream) {
     let megabytes_transferred = SPEEDTEST_TRANSFERS as f64 * megabytes_in_packet;
     let speed = megabytes_transferred / seconds_elapsed;
     println!("Upload speed = {speed:.2} MB/s");
+    println!("Transferred in {seconds_elapsed:.2}s");
 }
 
 
@@ -85,6 +86,7 @@ pub fn speedtest_in(mut stream: &mut TcpStream) {
     let megabytes_transferred = SPEEDTEST_TRANSFERS as f64 * megabytes_in_packet;
     let speed = megabytes_transferred / seconds_elapsed;
     println!("Download speed = {speed:.2} MB/s");
+    println!("Transferred in {seconds_elapsed:.2}s");
 }
 
 pub fn write_ping(stream: &mut TcpStream) {

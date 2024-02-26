@@ -39,7 +39,7 @@ fn main() {
 fn client_impl(config: Config) {
     let target_address = config.connect_address.as_ref().unwrap();
     let port = config.connect_port.unwrap();
-    println!("Attempting connection");
+    println!("Attempting connection to {target_address}");
     let mut stream = match connection::connect_ipv4(target_address, port) {
         Ok(tcp_stream) => tcp_stream,
         Err(err) => {
@@ -48,8 +48,7 @@ fn client_impl(config: Config) {
             return;
         }
     };
-    let peer_addr = stream.peer_addr().unwrap().ip();
-    println!("Connected to {peer_addr}!");
+    println!("Connected!");
     config.apply_timeouts(&mut stream);
     established_connection_stage(stream);
 }
