@@ -2,7 +2,9 @@ SERVER SETUP:
 
 host_auto_accept=true
 host_port=12345
-host=127.0.0.1
+
+Overriding host is optional:
+host=
 =======================
 CONNECT CONFIGURATION:
 

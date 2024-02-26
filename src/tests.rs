@@ -3,6 +3,7 @@ use std::io::{Read};
 use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::thread;
 use std::time::{Duration, Instant};
+use local_ip_address::Error;
 use crate::file_operator::FileFeeder;
 use crate::packet;
 use crate::packet::{FileOfferPacket, FilePacket, MB_1, MB_2, Packet, PingPacket, SpeedPacket};
@@ -129,5 +130,17 @@ fn file_test() {
 fn time() {
     println!("{}", packet::epoch_time_now())
 }
+
+#[test]
+fn local_ip_test() {
+    match local_ip_address::local_ip() {
+        Ok(ip) => {
+            println!("LOCAL IP: {:?}", ip)
+        }
+        Err(_) => {}
+    }
+}
+
+
 
 

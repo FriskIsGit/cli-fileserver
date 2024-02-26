@@ -19,8 +19,7 @@ mod speedtest;
 
 const PINGS: usize = 100;
 fn main() {
-    let mut config = Config::read_config();
-    config.assign_defaults();
+    let config = Config::read_config();
     // fileserver -> fs
     // SETUP: fileserver host / fileserver connect
     // EXCHANGE: share path / accept (id)
@@ -55,8 +54,20 @@ fn client_impl(config: Config) {
     established_connection_stage(stream);
 }
 
-fn server_impl(config: Config) {
-    println!("Running server");
+fn server_impl(mut config: Config) {
+    println!("Setting up server");
+    if config.host_address.is_none() {
+        match local_ip_address::local_ip() {
+            Ok(ip) => {
+                println!("LOCAL IP: {:?}", ip);
+                config.host_address = Some(ip.to_string());
+            }
+            Err(err) => {
+                panic!("Couldn't assign default ip: {err}")
+            }
+        }
+    }
+
     let host_address = config.host_address.as_ref().unwrap();
     let port = config.host_port.unwrap();
     let listener = connection::create_server(host_address, port);
