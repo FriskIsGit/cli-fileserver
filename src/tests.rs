@@ -16,9 +16,9 @@ fn new_tcp_connection(port: u16) -> (TcpStream, TcpStream) {
     let socket = SocketAddr::new(ip, port);
     let timeout = Duration::from_secs(5);
     let connect_st = Instant::now();
+    let server = thread_handle.join().unwrap();
     let client_tcp = TcpStream::connect_timeout(&socket, timeout).unwrap();
     println!("Time taken to connect: {:?}", connect_st.elapsed());
-    let server = thread_handle.join().unwrap();
     (client_tcp, server.accept().unwrap().0)
 }
 
@@ -87,7 +87,7 @@ fn speed_packet_test() {
 
 #[test]
 fn ping_packet_test() {
-    let (mut writer, mut reader) = new_tcp_connection(39995);
+    let (mut writer, mut reader) = new_tcp_connection(39996);
     let ping = PingPacket::new_ping();
     ping.write_header(&mut writer);
     ping.write(&mut writer);
