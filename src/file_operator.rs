@@ -1,8 +1,6 @@
 use std::fs::File;
 use std::io::{Read, Seek, Result};
 
-const MB_1: usize = 1048576;
-
 #[derive(Debug)]
 pub struct FileFeeder {
     file: File,
@@ -11,8 +9,7 @@ pub struct FileFeeder {
     buffer: Vec<u8>,
 }
 impl FileFeeder {
-    pub fn new(path: &str) -> Result<Self> {
-        let chunk_size = MB_1;
+    pub fn new(path: &str, chunk_size: usize) -> Result<Self> {
         let buffer = vec![0u8; chunk_size];
         let file_result = File::open(path);
         let Ok(file) = file_result else {
@@ -50,9 +47,15 @@ impl FileFeeder {
         }
     }
 
+    pub fn file_size(&self) -> u64 {
+        self.length
+    }
+
     // it doesn't modify anything
     fn cursor_pos(&mut self) -> u64 {
         self.file.stream_position()
             .expect("When does it fail?")
     }
 }
+
+// TODO struct BufferedFileWriter

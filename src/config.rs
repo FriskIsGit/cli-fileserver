@@ -1,3 +1,5 @@
+use std::net::TcpStream;
+use std::time::Duration;
 
 const HOST_AUTO_ACCEPT: &str = "host_auto_accept";
 
@@ -95,6 +97,16 @@ impl Config {
         }
         if self.read_timeout.is_none() {
             self.read_timeout = Some(60)
+        }
+    }
+    pub fn apply_timeouts(&self, stream: &mut TcpStream) {
+        if let Some(seconds) = self.write_timeout {
+            let timeout = Some(Duration::from_secs(seconds as u64));
+            let _ = stream.set_write_timeout(timeout);
+        }
+        if let Some(seconds) = self.read_timeout {
+            let timeout = Some(Duration::from_secs(seconds as u64));
+            let _ = stream.set_read_timeout(timeout);
         }
     }
 }

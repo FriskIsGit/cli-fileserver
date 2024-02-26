@@ -12,8 +12,13 @@ PACKET STRUCTURE FORMAT:
 
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
-use std::time::{Instant, SystemTime};
+use std::time::{SystemTime};
 
+pub const KB_125: usize = 128000;
+pub const KB_512: usize = 524288;
+pub const MB_1: usize = 1048576;
+pub const MB_2: usize = 2097152;
+pub const MB_100: usize = 20971520;
 pub const FIELD_OFFSET: usize = 8;
 
 pub trait Packet {
@@ -64,7 +69,14 @@ pub fn tcp_read_safe(mut buffer: &mut [u8], stream: &mut TcpStream) {
                 }
                 buffer = &mut buffer[read..];
             }
-            Err(err) => eprintln!("Encountered error when reading from socket: {err}")
+            Err(err) => {
+                let kind = err.kind();
+                eprintln!("Error \"{kind}\" occurred when reading from socket - {err}");
+                if kind != ErrorKind::Interrupted {
+                    // anything other than Interrupted is not salvageable
+                    return;
+                }
+            }
         }
     }
 }
@@ -83,6 +95,7 @@ pub fn read_content_size(stream: &mut TcpStream) -> u32 {
 
 // PACKET STRUCT IMPLEMENTATIONS
 pub struct FileOfferPacket {
+    pub transaction_id: u64,
     pub file_size: u64,
     // in bytes
     pub file_name: String,
@@ -90,18 +103,21 @@ pub struct FileOfferPacket {
 
 impl FileOfferPacket {
     pub const ID: u32 = 100_000;
-    pub fn new(file_size: u64, file_name: String) -> Self {
-        Self { file_size, file_name }
+    pub fn new(transaction_id: u64, file_size: u64, file_name: String) -> Self {
+        Self { transaction_id, file_size, file_name }
     }
     pub fn construct(field_bytes: &[u8]) -> Result<Self, String> {
-        if field_bytes.len() < 9 {
-            return Err(format!("Packet has {} bytes but at least 9 were expected", field_bytes.len()));
+        if field_bytes.len() < 17 {
+            return Err(format!("Packet has {} bytes but at least 17 were expected", field_bytes.len()));
         }
         let bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
+        let transaction_id = u64::from_be_bytes(bytes);
+
+        let bytes: [u8; 8] = field_bytes[8..16].try_into().unwrap();
         let file_size = u64::from_be_bytes(bytes);
 
-        return match String::from_utf8(field_bytes[8..].to_vec()) {
-            Ok(file_name) => Ok(Self::new(file_size, file_name)),
+        return match String::from_utf8(field_bytes[16..].to_vec()) {
+            Ok(file_name) => Ok(Self::new(transaction_id, file_size, file_name)),
             Err(e) => Err(e.to_string()),
         };
     }
@@ -124,10 +140,11 @@ impl Packet for FileOfferPacket {
     }
 
     fn size(&self) -> u32 {
-        (8 + self.file_name.len()) as u32
+        (8 + 8 + self.file_name.len()) as u32
     }
 
     fn write(&self, stream: &mut TcpStream) {
+        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
         tcp_write_safe(&self.file_size.to_be_bytes(), stream);
         tcp_write_safe(&self.file_name.as_bytes(), stream);
     }
@@ -269,5 +286,43 @@ impl Packet for PingPacket {
 
     fn write(&self, stream: &mut TcpStream) {
         tcp_write_safe(&self.creation_time.to_be_bytes(), stream);
+    }
+}
+
+pub struct ResponsePacket {
+    // id=0 should be used for errors
+    pub transaction_id: u64,
+    pub accepted: bool
+}
+impl ResponsePacket {
+    pub const ID: u32 = 600_000;
+    pub fn new(id: u64, ok: bool) -> Self {
+        Self { transaction_id: id, accepted: ok}
+    }
+
+    pub fn from_bytes(field_bytes: &[u8]) -> Self {
+        if field_bytes.len() < 9 {
+            eprintln!("Packet is {} bytes in length but 9 were expected", field_bytes.len());
+            return Self::new(0, false);
+        }
+        let id_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
+        let transaction_id = u64::from_be_bytes(id_bytes);
+        let accepted = if field_bytes[8] == 1 { true } else { false };
+        Self { transaction_id, accepted }
+    }
+}
+impl Packet for ResponsePacket {
+    fn id(&self) -> u32 {
+        ResponsePacket::ID
+    }
+
+    fn size(&self) -> u32 {
+        8 + 1
+    }
+
+    fn write(&self, stream: &mut TcpStream) {
+        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
+        let acceptance: [u8; 1] = if self.accepted { [1] } else { [0] };
+        tcp_write_safe(&acceptance, stream);
     }
 }

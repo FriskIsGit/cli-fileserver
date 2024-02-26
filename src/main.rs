@@ -1,3 +1,4 @@
+use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::path::Path;
@@ -5,7 +6,7 @@ use std::time::{Duration, Instant};
 use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
 use crate::file_operator::FileFeeder;
-use crate::packet::{FileOfferPacket, FilePacket, Packet, PingPacket, SpeedPacket, tcp_write_safe};
+use crate::packet::{FileOfferPacket, FilePacket, MB_1, MB_100, Packet, PingPacket, ResponsePacket, SpeedPacket, tcp_write_safe};
 use crate::speedtest::{speedtest_in, speedtest_out};
 
 mod connection;
@@ -37,29 +38,21 @@ fn main() {
 }
 
 fn client_impl(config: Config) {
-    println!("Attempting connection");
     let target_address = config.connect_address.as_ref().unwrap();
     let port = config.connect_port.unwrap();
-    let connection_res = connection::connect_ipv4(target_address, port);
-    let Ok(mut stream) = connection_res else {
-        eprintln!("Failed to connect: {}", connection_res.unwrap_err());
-        return;
+    println!("Attempting connection");
+    let mut stream = match connection::connect_ipv4(target_address, port) {
+        Ok(tcp_stream) => tcp_stream,
+        Err(err) => {
+            let err_kind = err.kind();
+            eprintln!("Error: \"{err_kind}\" - {err}");
+            return;
+        }
     };
     let peer_addr = stream.peer_addr().unwrap().ip();
     println!("Connected to {peer_addr}!");
-    apply_config_to_tcp(&config, &mut stream);
+    config.apply_timeouts(&mut stream);
     established_connection_stage(stream);
-}
-
-fn apply_config_to_tcp(config: &Config, stream: &mut TcpStream) {
-    if let Some(seconds) = config.write_timeout {
-        let timeout = Some(Duration::from_secs(seconds as u64));
-        let _ = stream.set_write_timeout(timeout);
-    }
-    if let Some(seconds) = config.read_timeout {
-        let timeout = Some(Duration::from_secs(seconds as u64));
-        let _ = stream.set_read_timeout(timeout);
-    }
 }
 
 fn server_impl(config: Config) {
@@ -67,8 +60,8 @@ fn server_impl(config: Config) {
     let host_address = config.host_address.as_ref().unwrap();
     let port = config.host_port.unwrap();
     let listener = connection::create_server(host_address, port);
-    let port = listener.local_addr().unwrap().port();
-    println!("Hosting server on port: {port}");
+    let local_address = listener.local_addr().unwrap();
+    println!("Hosting server on {}:{}", local_address.ip(), local_address.port());
 
     let auto_accept = if let Some(accept) = config.auto_accept { accept } else { false };
     // Connection listener implementation
@@ -85,8 +78,9 @@ fn server_impl(config: Config) {
                 }
                 let peer_addr = stream.peer_addr().unwrap().ip();
                 println!("Connected to {peer_addr}!");
-                apply_config_to_tcp(&config, &mut stream);
+                config.apply_timeouts(&mut stream);
                 established_connection_stage(stream);
+                println!("Closed socket, listening for new connections..");
             }
             Err(err) => {
                 eprintln!("Failed to accept connection: {err}");
@@ -96,9 +90,17 @@ fn server_impl(config: Config) {
     };
 }
 
+pub fn read_line() -> String {
+    let mut buffer = String::new();
+    return match std::io::stdin().read_line(&mut buffer) {
+        Ok(_) => buffer.trim_end().to_string(),
+        Err(_) => "".into(),
+    };
+}
+
 fn established_connection_stage(mut stream: TcpStream) {
     loop {
-        println!("[shutdown, ping 1, ping 2, share <path>, read <count>, speedtest in, speedtest out]");
+        println!("[share <path>, read, ping send, ping get, speedtest in, speedtest out, shutdown]");
         let line = read_line();
         let command = line.as_str();
         println!("[{command}]");
@@ -109,23 +111,33 @@ fn established_connection_stage(mut stream: TcpStream) {
             let Some(whitespace) = command.find(' ') else {
                 continue
             };
-            let path = &command[whitespace + 1..];
-            if !Path::new(path).exists() {
+            let file_path = &command[whitespace + 1..];
+            let path = Path::new(file_path);
+            if !path.exists() {
                 eprintln!("File not found");
                 continue
             }
-            stream_file(path, &mut stream);
-        } else if command.starts_with("read") {
-            let whitespace = command.find(' ').unwrap();
-            let count = command[whitespace + 1..].parse::<usize>().unwrap();
-            for _ in 0..count {
-                read_and_handle_packet(&mut stream);
+            if path.is_dir() {
+                eprintln!("File is a directory");
+                continue
             }
+            let accepted = send_offer_and_read_response(file_path, &mut stream);
+            if accepted {
+                println!("File was accepted.");
+                stream_file(file_path, &mut stream);
+            } else {
+                println!("File denied!");
+            }
+        } else if command.starts_with("read") {
+            // let whitespace = command.find(' ').unwrap();
+            // let count = command[whitespace + 1..].parse::<usize>().unwrap();
+            // for _ in 0..count { }
+            read_and_handle_packet(&mut stream);
         } else if command.starts_with("speedtest in") || command.starts_with("si") {
             speedtest_in(&mut stream);
         } else if command.starts_with("speedtest out") || command.starts_with("so") {
             speedtest_out(&mut stream);
-        } else if command.starts_with("ping 1") {
+        } else if command.starts_with("ping send") {
             for _ in 0..PINGS {
                 let ping_start = Instant::now();
                 write_ping(&mut stream);
@@ -133,7 +145,7 @@ fn established_connection_stage(mut stream: TcpStream) {
                 let end = ping_start.elapsed();
                 println!("W/R: {:?}", end);
             }
-        } else if command.starts_with("ping 2") {
+        } else if command.starts_with("ping get") {
             for _ in 0..PINGS {
                 let ping_start = Instant::now();
                 read_ping(&mut stream);
@@ -145,6 +157,33 @@ fn established_connection_stage(mut stream: TcpStream) {
     }
 }
 
+type Accepted = bool;
+fn send_offer_and_read_response(file_path: &str, stream: &mut TcpStream) -> Accepted {
+    let file = File::open(file_path).expect("File should exist by now");
+    let Ok(metadata) = file.metadata() else {
+        eprintln!("Cannot read metadata of file at {file_path}");
+        return false;
+    };
+    let file_name = Path::new(file_path).file_name().unwrap().to_str().unwrap();
+
+    let offer = FileOfferPacket::new(1, metadata.len(), file_name.to_string());
+    offer.write_header(stream);
+    offer.write(stream);
+    println!("Sent offer");
+    let id = packet::read_id(stream);
+    if id != ResponsePacket::ID {
+        eprintln!("Response packet was expected");
+        return false;
+    }
+    let packet_size = packet::read_content_size(stream);
+
+    let mut field_buffer = vec![0u8; packet_size as usize];
+    packet::tcp_read_safe(&mut field_buffer, stream);
+
+    let response = ResponsePacket::from_bytes(&field_buffer);
+    return response.accepted;
+}
+
 fn read_and_handle_packet(stream: &mut TcpStream) {
     let id = packet::read_id(stream);
     let packet_size = packet::read_content_size(stream);
@@ -154,8 +193,60 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
     match id {
         FileOfferPacket::ID => {
             match FileOfferPacket::construct(&field_buffer) {
-                Ok(packet) => {
-                    println!("Download {}?  [{}]", packet.file_name, packet.format_size())
+                Ok(file_offer) => {
+                    println!("Download {}?  [{}] (y/n)", file_offer.file_name, file_offer.format_size());
+                    let ok = read_line().starts_with('y');
+                    let response_packet = ResponsePacket::new(1, ok);
+                    response_packet.write_header(stream);
+                    response_packet.write(stream);
+
+                    if !ok {
+                        return;
+                    }
+                    if let Err(err) = File::create(&file_offer.file_name) {
+                        eprintln!("{err}");
+                        return;
+                    }
+                    let mut file = OpenOptions::new()
+                        .write(true)
+                        .append(true)
+                        .open(file_offer.file_name).unwrap();
+
+                    let size_goal = file_offer.file_size;
+                    let mut size_so_far = 0;
+
+                    let start = Instant::now();
+                    while size_so_far < size_goal {
+                        let id = packet::read_id(stream);
+                        if id != FilePacket::ID {
+                            eprintln!("{id} wasn't expected at this time");
+                            return;
+                        }
+                        let content_size = packet::read_content_size(stream);
+
+                        // TODO try to reuse buffer?
+                        let mut buffer = vec![0u8; content_size as usize];
+                        packet::tcp_read_safe(&mut buffer, stream);
+                        match FilePacket::wrap(&buffer) {
+                            Ok(packet) => {
+                                let content_len = packet.file_bytes.len() as u64;
+                                match file.write_all(packet.file_bytes) {
+                                    Ok(_) => size_so_far += content_len,
+                                    Err(err) => println!("Failed to write to file: {err}")
+                                }
+                                let seconds_so_far = start.elapsed().as_secs_f64();
+                                let speed = size_so_far as f64 / MB_1 as f64 / seconds_so_far;
+                                let progress = (size_so_far as f64 / size_goal as f64) * 100f64;
+                                println!("progress={progress:.2}% | speed={speed:.2}MB/s");
+                            }
+                            Err(err) => {
+                                println!("Error at FilePacket::wrap - {err}");
+                            }
+                        }
+                    }
+                    let elapsed = start.elapsed();
+                    println!("Time taken to download: {:?}", elapsed);
+
                 }
                 Err(err) => eprintln!("Failure: {err}")
             }
@@ -185,24 +276,27 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
     }
 }
 
-fn read_line() -> String {
-    let mut buffer = String::new();
-    return match std::io::stdin().read_line(&mut buffer) {
-        Ok(_) => buffer.trim_end().to_string(),
-        Err(_) => "".into(),
-    };
-}
-
 fn stream_file(path: &str, stream: &mut TcpStream) {
-    let mut file_feeder = FileFeeder::new(path).expect("Couldn't initialize file reader");
+    let mut file_feeder = FileFeeder::new(path, MB_1).expect("Couldn't initialize file reader");
+    let size_goal = file_feeder.file_size();
+    let mut bytes_written = 0;
     let mut chunk_id = 0;
+    let start = Instant::now();
     while file_feeder.has_next_chunk() {
         let chunk = file_feeder.read_next_chunk().expect("No next chunk");
         let packet = FilePacket::new(1, chunk_id, &chunk);
         packet.write_header(stream);
         packet.write(stream);
         chunk_id += 1;
+        bytes_written += chunk.len();
+        let seconds_so_far = start.elapsed().as_secs_f64();
+        let speed = bytes_written as f64 / MB_1 as f64 / seconds_so_far;
+        let progress = (bytes_written as f64 / size_goal as f64) * 100f64;
+        println!("progress={progress:.2}% | speed={speed:.2}MB/s")
     }
+
+    let elapsed = start.elapsed();
+    println!("Time taken to download: {:?}", elapsed);
 }
 
 pub fn write_ping(stream: &mut TcpStream) {

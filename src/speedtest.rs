@@ -2,17 +2,14 @@ use std::net::TcpStream;
 use std::ops::{Add, Sub};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use crate::packet::{Packet, PingPacket, SpeedPacket, SpeedtestInfoPacket};
+use crate::packet::{MB_1, Packet, PingPacket, SpeedPacket, SpeedtestInfoPacket};
 use crate::{packet, read_and_handle_packet};
 
 // Now all parameters can be changed
 const SPEEDTEST_TRANSFERS: usize = 100;
 const SPEED_PACKET_SIZE: usize = MB_1;
 
-const KB_125: usize = 128000;
-const KB_512: usize = 524288; // diez are the most efficient?
-const MB_1: usize = 1048576;
-const MB_2: usize = 2097152;
+// KB_512 are the most efficient?
 
 pub fn speedtest_out(mut stream: &mut TcpStream) {
     let mut payload = vec![0u8; SPEED_PACKET_SIZE];

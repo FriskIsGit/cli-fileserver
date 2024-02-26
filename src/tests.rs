@@ -5,7 +5,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use crate::file_operator::FileFeeder;
 use crate::packet;
-use crate::packet::{FileOfferPacket, FilePacket, Packet, PingPacket, SpeedPacket};
+use crate::packet::{FileOfferPacket, FilePacket, MB_1, MB_2, Packet, PingPacket, SpeedPacket};
 
 fn new_tcp_connection(port: u16) -> (TcpStream, TcpStream) {
     let addr = format!("127.0.0.1:{port}");
@@ -53,7 +53,7 @@ fn close_sockets(stream1: TcpStream, stream2: TcpStream) {
 fn transfer_offer_test() {
     let (mut writer, mut reader) = new_tcp_connection(39994);
     let start = Instant::now();
-    let original_packet = FileOfferPacket::new(313, "àáąâãäå.zip".into());
+    let original_packet = FileOfferPacket::new(133, 313, "àáąâãäå.zip".into());
     original_packet.write(&mut writer);
     let declared_size = original_packet.size();
 
@@ -114,7 +114,7 @@ fn file_test() {
     orig_file.read_exact(&mut orig_buffer).unwrap();
     drop(orig_file);
 
-    let mut feeder = FileFeeder::new(path).expect("Where is file?");
+    let mut feeder = FileFeeder::new(path, MB_1).expect("Where is file?");
     let mut feeder_buffer = vec![];
     while feeder.has_next_chunk() {
         match feeder.read_next_chunk() {
