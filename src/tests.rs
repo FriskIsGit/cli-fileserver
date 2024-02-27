@@ -135,9 +135,12 @@ fn time() {
 fn local_ip_test() {
     match local_ip_address::local_ip() {
         Ok(ip) => {
-            println!("LOCAL IP: {:?}", ip)
+            println!("LOCAL IP: {:?}", ip);
+            assert!(true);
         }
-        Err(_) => {}
+        Err(_) => {
+            assert!(false);
+        }
     }
 }
 

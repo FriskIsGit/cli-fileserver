@@ -19,7 +19,7 @@ mod speedtest;
 
 const PINGS: usize = 100;
 fn main() {
-    let config = Config::read_config();
+    let mut config = Config::read_config();
     // fileserver -> fs
     // SETUP: fileserver host / fileserver connect
     // EXCHANGE: share path / accept (id)
@@ -28,10 +28,27 @@ fn main() {
         ProgramArgs::print_info();
         return;
     }
+
     // Listen to connections, y/n, if n listen for another connection,
-    match program_args.args[0].as_str() {
-        HOST => server_impl(config),
-        CONNECT => client_impl(config),
+    match program_args.args[0].to_lowercase().as_str() {
+        HOST => {
+            if let Some(address) = program_args.address {
+                config.host_address = Some(address);
+            }
+            if let Some(port) = program_args.port {
+                config.host_port = Some(port);
+            }
+            server_impl(config)
+        },
+        CONNECT => {
+            if let Some(address) = program_args.address {
+                config.connect_address = Some(address);
+            }
+            if let Some(port) = program_args.port {
+                config.connect_port = Some(port);
+            }
+            client_impl(config)
+        },
         _ => {}
     }
 }

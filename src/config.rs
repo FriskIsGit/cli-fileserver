@@ -49,7 +49,7 @@ impl Config {
         let content = match std::fs::read_to_string(CONFIG_NAME) {
             Ok(content) => content,
             Err(err) => {
-                eprintln!("{}; Failed to read: {CONFIG_NAME}", err.to_string());
+                eprintln!("Failed to read: {CONFIG_NAME} | {err}");
                 return config;
             }
         };

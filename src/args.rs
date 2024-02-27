@@ -1,3 +1,4 @@
+use std::num::ParseIntError;
 
 pub const HOST: &str = "host";
 pub const CONNECT: &str = "connect";
@@ -8,6 +9,8 @@ pub struct ProgramArgs {
     // We can use 'exe' path for determining the relative location of config.txt
     pub exe: String,
     pub args: Vec<String>,
+    pub address: Option<String>,
+    pub port: Option<u16>,
 }
 
 impl ProgramArgs {
@@ -21,15 +24,51 @@ impl ProgramArgs {
         unsafe {
             args.set_len(args.len() - 1)
         }
-        Self { exe: exe_path, args }
+
+        let length = args.len();
+        let mut port_arg = None;
+        let mut address_arg = None;
+        let mut i = 0;
+        while i < length {
+            let argument = &args[i];
+            if argument == "-p" && i+1 < length {
+                match args[i+1].parse::<u16>() {
+                    Ok(port) => port_arg = Some(port),
+                    Err(_) => panic!("Failed to parse port argument!"),
+                }
+                i += 1;
+            } else if argument.starts_with("--port=")  {
+                let Some(equal) = argument.find('=') else {
+                    println!("Unrecognized argument: {argument}");
+                    continue
+                };
+                match argument[equal+1..].parse::<u16>() {
+                    Ok(port) => port_arg = Some(port),
+                    Err(_) => panic!("Failed to parse port argument!"),
+                }
+            } else if argument.starts_with("-a") && i+1 < length {
+                address_arg = Some(args[i+1].to_string());
+                i += 1;
+            } else if argument.starts_with("--address=")  {
+                let Some(equal) = argument.find('=') else {
+                    println!("Unrecognized argument: {argument}");
+                    continue
+                };
+                address_arg = Some(argument[equal+1..].to_string())
+            }
+            i += 1;
+        }
+        Self { exe: exe_path, args, address: address_arg, port: port_arg}
     }
 
     pub fn has_args(&self) -> bool {
         self.args.len() > 0
     }
     pub fn print_info() {
-        println!("No arguments provided");
-        println!("{HOST} - listen for a connection");
-        println!("{CONNECT} - initiate a connection");
+        println!("fileserver {HOST} - listen for a connection");
+        println!("fileserver {CONNECT} - initiate a connection");
+        println!("Additional arguments:");
+        println!("-a, --address=<string>");
+        println!("-p, --port=<u16>");
     }
 }
