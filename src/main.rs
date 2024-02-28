@@ -7,7 +7,7 @@ use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
 use crate::file_operator::FileFeeder;
 use crate::packet::{FileOfferPacket, FilePacket, MB_1, MB_100, Packet, PingPacket, ResponsePacket, SpeedPacket, tcp_write_safe};
-use crate::speedtest::{speedtest_in, speedtest_out};
+use crate::speedtest::{round_trip_time, speedtest_in, speedtest_out};
 
 mod connection;
 mod config;
@@ -165,20 +165,16 @@ fn established_connection_stage(mut stream: TcpStream) {
         } else if command.starts_with("speedtest out") || command.starts_with("so") {
             speedtest_out(&mut stream);
         } else if command.starts_with("ping send") {
-            for _ in 0..PINGS {
-                let ping_start = Instant::now();
-                write_ping(&mut stream);
-                read_ping(&mut stream);
-                let end = ping_start.elapsed();
-                println!("W/R: {:?}", end);
+            for p in 0..PINGS {
+                let rtt = round_trip_time(&mut stream);
+                println!("{p}# RTT: {:?}", rtt);
             }
+            write_ping(&mut stream);
         } else if command.starts_with("ping get") {
-            for _ in 0..PINGS {
-                let ping_start = Instant::now();
-                read_ping(&mut stream);
-                write_ping(&mut stream);
-                let end = ping_start.elapsed();
-                println!("W/R: {:?}", end);
+            read_ping(&mut stream);
+            for p in 0..PINGS {
+                let rtt = round_trip_time(&mut stream);
+                println!("{p}# RTT: {:?}", rtt);
             }
         }
     }
