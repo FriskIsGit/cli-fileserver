@@ -124,9 +124,9 @@ pub fn read_line() -> String {
 
 pub fn select_local_ip() -> String {
 
-    #[cfg(target_os = "linux", target_os = "android")]
+    #[cfg(target_os = "linux")]
     {
-        println!("Targetting linux or android");
+        println!("Targetting linux");
         const TARGET_INTERFACES: [(&str, &str); 2] = [("eth", "enp"), ("wlan", "wlp")];
         let interfaces =  local_ip_address::list_afinet_netifas()
             .expect("Failed to retrieve network interfaces, specify host address explicitly.");
