@@ -238,6 +238,7 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                     let size_goal = file_offer.file_size;
                     let mut size_so_far = 0;
 
+                    let mut buffer = vec![0u8; MB_1];
                     let start = Instant::now();
                     while size_so_far < size_goal {
                         let id = packet::read_id(stream);
@@ -245,10 +246,10 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                             eprintln!("{id} wasn't expected at this time");
                             return;
                         }
-                        let content_size = packet::read_content_size(stream);
+                        let content_size = packet::read_content_size(stream) as usize;
 
-                        // TODO try to reuse buffer?
-                        let mut buffer = vec![0u8; content_size as usize];
+                        buffer.reserve_exact(content_size - buffer.len());
+                        unsafe { buffer.set_len(content_size); }
                         packet::tcp_read_safe(&mut buffer, stream);
                         match FilePacket::wrap(&buffer) {
                             Ok(packet) => {
@@ -266,9 +267,10 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                                 println!("Error at FilePacket::wrap - {err}");
                             }
                         }
+                        buffer.clear();
                     }
                     let elapsed = start.elapsed();
-                    println!("Time taken to download: {:?}", elapsed);
+                    println!("Download completed in {:?}", elapsed);
 
                 }
                 Err(err) => eprintln!("Failure: {err}")
@@ -319,7 +321,7 @@ fn stream_file(path: &str, stream: &mut TcpStream) {
     }
 
     let elapsed = start.elapsed();
-    println!("Time taken to download: {:?}", elapsed);
+    println!("Upload completed in {:?}", elapsed);
 }
 
 pub fn write_ping(stream: &mut TcpStream) {
