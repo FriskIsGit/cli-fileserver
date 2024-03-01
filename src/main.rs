@@ -123,38 +123,12 @@ pub fn read_line() -> String {
 
 
 pub fn select_local_ip() -> String {
-
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    {
-        println!("Targetting linux or android");
-        const TARGET_INTERFACES: [(&str, &str); 2] = [("eth", "enp"), ("wlan", "wlp")];
-        let interfaces =  local_ip_address::list_afinet_netifas()
-            .expect("Failed to retrieve network interfaces, specify host address explicitly.");
-        for interface_type in TARGET_INTERFACES {
-            for net in interfaces.iter() {
-                let ip = net.1;
-                if ip.is_loopback() || ip.is_ipv6() || ip.is_unspecified() {
-                    continue
-                }
-
-                let name = &net.0;
-                if name.starts_with(interface_type.0) || name.starts_with(interface_type.1) {
-                    return name.to_owned();
-                }
-            }
+    match local_ip_address::local_ip() {
+        Ok(ip) => {
+            println!("LOCAL IP: {:?}", ip);
+            return ip.to_string();
         }
-        return "127.0.0.1".to_owned();
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        match local_ip_address::local_ip() {
-            Ok(ip) => {
-                println!("LOCAL IP: {:?}", ip);
-                return ip.to_string();
-            }
-            Err(err) => panic!("Couldn't assign default ip: {err}")
-        }
+        Err(err) => panic!("Couldn't assign default ip: {err}")
     }
 }
 
