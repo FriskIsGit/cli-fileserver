@@ -1,12 +1,11 @@
 use std::fs::File;
-use std::io::{Read};
+use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::thread;
 use std::time::{Duration, Instant};
-use local_ip_address::Error;
 use crate::file_operator::FileFeeder;
 use crate::packet;
-use crate::packet::{FileOfferPacket, FilePacket, MB_1, MB_2, Packet, PingPacket, SpeedPacket};
+use crate::packet::{FileOfferPacket, FilePacket, MB_1, Packet, PingPacket, SpeedPacket};
 
 fn new_tcp_connection(port: u16) -> (TcpStream, TcpStream) {
     let addr = format!("127.0.0.1:{port}");
@@ -138,9 +137,7 @@ fn local_ip_test() {
             println!("LOCAL IP: {:?}", ip);
             assert!(true);
         }
-        Err(_) => {
-            assert!(false);
-        }
+        Err(_) => assert!(false)
     }
 }
 #[test]
@@ -151,9 +148,7 @@ fn interfaces_fetch_test() {
     for net in interfaces {
         let name = net.0;
         let ip = net.1;
-        let loopback = ip.is_loopback();
-        let multicast = ip.is_multicast();
-        println!("name = {name} | ip = {ip} | loopback = {loopback} | multicast = {multicast}");
+        println!("name = {name} | ip = {ip}");
     }
 }
 

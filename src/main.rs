@@ -1,8 +1,8 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
-use std::net::{IpAddr, Shutdown, TcpStream};
+use std::net::{Shutdown, TcpStream};
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
 use crate::file_operator::FileFeeder;
@@ -24,7 +24,7 @@ fn main() {
     // SETUP: fileserver host / fileserver connect
     // EXCHANGE: share path / accept (id)
     let program_args = ProgramArgs::retrieve();
-    if !program_args.has_args() {
+    if program_args.args.is_empty() {
         ProgramArgs::print_info();
         return;
     }
@@ -117,31 +117,45 @@ pub fn read_line() -> String {
     };
 }
 
-// enp - ETHERNET
+// eth or enp - ETHERNET
+// wlan or wlp - WIFI
+// lo - local
+
 
 pub fn select_local_ip() -> String {
-    /*let interfaces =  local_ip_address::list_afinet_netifas()
-        .expect("Failed to retrieve network interfaces, specify host address explicitly.");
 
-    for net in interfaces {
-        let ip = net.1;
-        if ip.is_loopback() || ip.is_ipv6() || ip.is_unspecified() {
-            continue
-        }
+    #[cfg(target_os = "linux")]
+    {
+        println!("Targetting linux");
+        const TARGET_INTERFACES: [(&str, &str); 2] = [("eth", "enp"), ("wlan", "wlp")];
+        let interfaces =  local_ip_address::list_afinet_netifas()
+            .expect("Failed to retrieve network interfaces, specify host address explicitly.");
+        for interface_type in TARGET_INTERFACES {
+            for net in interfaces.iter() {
+                let ip = net.1;
+                if ip.is_loopback() || ip.is_ipv6() || ip.is_unspecified() {
+                    continue
+                }
 
-        let name = net.0;
-        println!("name = {name} | ip = {ip}");
-    }*/
-    match local_ip_address::local_ip() {
-        Ok(ip) => {
-            println!("LOCAL IP: {:?}", ip);
-            return ip.to_string();
+                let name = &net.0;
+                if name.starts_with(interface_type.0) || name.starts_with(interface_type.1) {
+                    return name.to_owned();
+                }
+            }
         }
-        Err(err) => {
-            panic!("Couldn't assign default ip: {err}")
-        }
+        return "127.0.0.1".to_owned();
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        match local_ip_address::local_ip() {
+            Ok(ip) => {
+                println!("LOCAL IP: {:?}", ip);
+                return ip.to_string();
+            }
+            Err(err) => panic!("Couldn't assign default ip: {err}")
+        }
+    }
 }
 
 fn established_connection_stage(mut stream: TcpStream) {
@@ -250,7 +264,6 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                         return;
                     }
                     let mut file = OpenOptions::new()
-                        .write(true)
                         .append(true)
                         .open(file_offer.file_name).unwrap();
 
@@ -315,7 +328,6 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
         }
         _ => {
             println!("Unrecognized packet {id}");
-            return;
         }
     }
 }
@@ -328,7 +340,7 @@ fn stream_file(path: &str, stream: &mut TcpStream) {
     let start = Instant::now();
     while file_feeder.has_next_chunk() {
         let chunk = file_feeder.read_next_chunk().expect("No next chunk");
-        let packet = FilePacket::new(1, chunk_id, &chunk);
+        let packet = FilePacket::new(1, chunk_id, chunk);
         packet.write_header(stream);
         packet.write(stream);
         chunk_id += 1;

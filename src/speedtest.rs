@@ -1,4 +1,3 @@
-use std::mem;
 use std::net::TcpStream;
 use rand::Rng;
 use std::thread::sleep;
@@ -12,7 +11,7 @@ const SPEED_PACKET_SIZE: usize = MB_1;
 
 // KB_512 are the most efficient?
 
-pub fn speedtest_out(mut stream: &mut TcpStream) {
+pub fn speedtest_out(stream: &mut TcpStream) {
     let mut payload = vec![0u8; SPEED_PACKET_SIZE];
     let mut rng = rand::thread_rng();
     for i in 0..SPEED_PACKET_SIZE {
@@ -32,8 +31,8 @@ pub fn speedtest_out(mut stream: &mut TcpStream) {
 
     let start = Instant::now();
     for i in 1..=SPEEDTEST_TRANSFERS {
-        packet.write_header(&mut stream);
-        packet.write(&mut stream);
+        packet.write_header(stream);
+        packet.write(stream);
 
         let elapsed = start.elapsed();
         let seconds = elapsed.as_millis() as f64 / 1000f64;
@@ -68,7 +67,7 @@ pub fn speedtest_in(mut stream: &mut TcpStream) {
 
     let start = Instant::now();
     for i in 1..=SPEEDTEST_TRANSFERS {
-        read_and_handle_packet(&mut stream);
+        read_and_handle_packet(stream);
         let elapsed = start.elapsed();
         let seconds = elapsed.as_millis() as f64 / 1000f64;
 

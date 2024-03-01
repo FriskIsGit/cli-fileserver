@@ -19,7 +19,6 @@ pub const KB_512: usize = 524288;
 pub const MB_1: usize = 1048576;
 pub const MB_2: usize = 2097152;
 pub const MB_100: usize = 20971520;
-pub const FIELD_OFFSET: usize = 8;
 
 pub trait Packet {
     // Every packet must identify itself
@@ -129,7 +128,7 @@ impl FileOfferPacket {
             unit_index += 1;
         }
         let unit = UNITS[unit_index];
-        return format!("{:.2}{unit}", value);
+        return format!("{value:.2}{unit}");
     }
 }
 const UNITS: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
@@ -146,7 +145,7 @@ impl Packet for FileOfferPacket {
     fn write(&self, stream: &mut TcpStream) {
         tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
         tcp_write_safe(&self.file_size.to_be_bytes(), stream);
-        tcp_write_safe(&self.file_name.as_bytes(), stream);
+        tcp_write_safe(self.file_name.as_bytes(), stream);
     }
 }
 
@@ -191,7 +190,7 @@ impl<'r> Packet for FilePacket<'r> {
     fn write(&self, stream: &mut TcpStream) {
         tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
         tcp_write_safe(&self.chunk_id.to_be_bytes(), stream);
-        tcp_write_safe(&self.file_bytes, stream);
+        tcp_write_safe(self.file_bytes, stream);
     }
 }
 
@@ -221,7 +220,7 @@ impl<'r> Packet for SpeedPacket<'r> {
     }
 
     fn write(&self, stream: &mut TcpStream) {
-        tcp_write_safe(&self.random_bytes, stream);
+        tcp_write_safe(self.random_bytes, stream);
     }
 }
 
@@ -307,7 +306,7 @@ impl ResponsePacket {
         }
         let id_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
         let transaction_id = u64::from_be_bytes(id_bytes);
-        let accepted = if field_bytes[8] == 1 { true } else { false };
+        let accepted = field_bytes[8] == 1;
         Self { transaction_id, accepted }
     }
 }

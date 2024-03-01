@@ -76,29 +76,7 @@ impl Config {
         }
         config
     }
-    pub fn assign_defaults(&mut self) {
-        if self.host_address.is_none() {
-            self.host_address = Some(DEFAULT_ADDR.to_string())
-        }
-        if self.connect_address.is_none() {
-            self.connect_address = Some(DEFAULT_ADDR.to_string())
-        }
-        if self.connect_port.is_none() {
-            self.connect_port = Some(DEFAULT_PORT)
-        }
-        if self.host_port.is_none() {
-            self.host_port = Some(DEFAULT_PORT)
-        }
-        if self.auto_accept.is_none() {
-            self.auto_accept = Some(false)
-        }
-        if self.write_timeout.is_none() {
-            self.write_timeout = Some(60)
-        }
-        if self.read_timeout.is_none() {
-            self.read_timeout = Some(60)
-        }
-    }
+
     pub fn apply_timeouts(&self, stream: &mut TcpStream) {
         if let Some(seconds) = self.write_timeout {
             let timeout = Some(Duration::from_secs(seconds as u64));

@@ -1,4 +1,3 @@
-use std::num::ParseIntError;
 
 pub const HOST: &str = "host";
 pub const CONNECT: &str = "connect";
@@ -16,7 +15,7 @@ pub struct ProgramArgs {
 impl ProgramArgs {
     pub fn retrieve() -> Self {
         let mut args: Vec<String> = std::env::args().collect();
-        if args.len() == 0 {
+        if args.is_empty() {
             panic!("Is this possible?")
         }
         let exe_path = std::mem::take(&mut args[0]);
@@ -61,9 +60,6 @@ impl ProgramArgs {
         Self { exe: exe_path, args, address: address_arg, port: port_arg}
     }
 
-    pub fn has_args(&self) -> bool {
-        self.args.len() > 0
-    }
     pub fn print_info() {
         println!("fileserver {HOST} - listen for a connection");
         println!("fileserver {CONNECT} - initiate a connection");

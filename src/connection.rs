@@ -48,13 +48,11 @@ fn create_ipv4_socket(address: &str, port: u16) -> SocketAddr {
 pub fn ipv4_address_to_byte_vec(address: &str) -> [u8; 4] {
     let mut octets = [0u8; 4];
     let components = address.split('.');
-    let mut i = 0;
-    for comp in components {
+    for (i, comp) in components.enumerate() {
         let Ok(byte) = comp.parse::<u8>() else {
             panic!("Error: The address {address} is invalid")
         };
         octets[i] = byte;
-        i += 1;
     }
     octets
 }
