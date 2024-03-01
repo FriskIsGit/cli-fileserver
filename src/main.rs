@@ -16,7 +16,6 @@ mod packet;
 mod args;
 mod tests;
 mod speedtest;
-mod ip_utils;
 
 const PINGS: usize = 100;
 fn main() {
