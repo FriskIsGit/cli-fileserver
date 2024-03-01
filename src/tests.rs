@@ -143,6 +143,19 @@ fn local_ip_test() {
         }
     }
 }
+#[test]
+fn interfaces_fetch_test() {
+    let interfaces =  local_ip_address::list_afinet_netifas()
+        .expect("Failed to retrieve network interfaces, specify host address explicitly.");
+
+    for net in interfaces {
+        let name = net.0;
+        let ip = net.1;
+        let loopback = ip.is_loopback();
+        let multicast = ip.is_multicast();
+        println!("name = {name} | ip = {ip} | loopback = {loopback} | multicast = {multicast}");
+    }
+}
 
 
 

@@ -1,6 +1,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpStream};
+use std::net::{IpAddr, Shutdown, TcpStream};
 use std::path::Path;
 use std::time::{Duration, Instant};
 use crate::args::{CONNECT, ProgramArgs, HOST};
@@ -16,6 +16,7 @@ mod packet;
 mod args;
 mod tests;
 mod speedtest;
+mod ip_utils;
 
 const PINGS: usize = 100;
 fn main() {
@@ -73,15 +74,7 @@ fn client_impl(config: Config) {
 fn server_impl(mut config: Config) {
     println!("Setting up server");
     if config.host_address.is_none() {
-        match local_ip_address::local_ip() {
-            Ok(ip) => {
-                println!("LOCAL IP: {:?}", ip);
-                config.host_address = Some(ip.to_string());
-            }
-            Err(err) => {
-                panic!("Couldn't assign default ip: {err}")
-            }
-        }
+        config.host_address = Some(select_local_ip());
     }
 
     let host_address = config.host_address.as_ref().unwrap();
@@ -123,6 +116,33 @@ pub fn read_line() -> String {
         Ok(_) => buffer.trim_end().to_string(),
         Err(_) => "".into(),
     };
+}
+
+// enp - ETHERNET
+
+pub fn select_local_ip() -> String {
+    /*let interfaces =  local_ip_address::list_afinet_netifas()
+        .expect("Failed to retrieve network interfaces, specify host address explicitly.");
+
+    for net in interfaces {
+        let ip = net.1;
+        if ip.is_loopback() || ip.is_ipv6() || ip.is_unspecified() {
+            continue
+        }
+
+        let name = net.0;
+        println!("name = {name} | ip = {ip}");
+    }*/
+    match local_ip_address::local_ip() {
+        Ok(ip) => {
+            println!("LOCAL IP: {:?}", ip);
+            return ip.to_string();
+        }
+        Err(err) => {
+            panic!("Couldn't assign default ip: {err}")
+        }
+    }
+
 }
 
 fn established_connection_stage(mut stream: TcpStream) {
