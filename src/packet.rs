@@ -120,18 +120,18 @@ impl FileOfferPacket {
             Err(e) => Err(e.to_string()),
         };
     }
-    pub fn format_size(&self) -> String {
-        let mut value = self.file_size as f64;
-        let mut unit_index = 0;
-        while value > 1024f64 {
-            value /= 1024f64;
-            unit_index += 1;
-        }
-        let unit = UNITS[unit_index];
-        return format!("{value:.2}{unit}");
-    }
 }
 const UNITS: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
+pub fn format_size(file_size: u64) -> String {
+    let mut value = file_size as f64;
+    let mut unit_index = 0;
+    while value > 1024f64 {
+        value /= 1024f64;
+        unit_index += 1;
+    }
+    let unit = UNITS[unit_index];
+    return format!("{value:.2}{unit}");
+}
 
 impl Packet for FileOfferPacket {
     fn id(&self) -> u32 {
@@ -323,5 +323,51 @@ impl Packet for ResponsePacket {
         tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
         let acceptance: [u8; 1] = if self.accepted { [1] } else { [0] };
         tcp_write_safe(&acceptance, stream);
+    }
+}
+
+pub struct BeginUploadPacket {
+    pub transaction_id: u64,
+    pub cursor: u64,
+    pub start: bool, // if file was denied -> false
+}
+impl BeginUploadPacket {
+    pub const ID: u32 = 700_000;
+    pub fn accept(id: u64, cursor: u64) -> Self {
+        Self { transaction_id: id, cursor, start: true }
+    }
+    pub fn deny() -> Self {
+        Self { transaction_id: 0, cursor: 0, start: false }
+    }
+
+    pub fn from_bytes(field_bytes: &[u8]) -> Self {
+        if field_bytes.len() < 9 {
+            eprintln!("Packet is {} bytes in length but 9 were expected", field_bytes.len());
+            return Self::deny();
+        }
+        let id_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
+        let transaction_id = u64::from_be_bytes(id_bytes);
+
+        let cursor_bytes: [u8; 8] = field_bytes[8..16].try_into().unwrap();
+        let cursor = u64::from_be_bytes(cursor_bytes);
+
+        let start = field_bytes[16] == 1;
+        Self { transaction_id, cursor, start }
+    }
+}
+impl Packet for BeginUploadPacket {
+    fn id(&self) -> u32 {
+        BeginUploadPacket::ID
+    }
+
+    fn size(&self) -> u32 {
+        16 + 1
+    }
+
+    fn write(&self, stream: &mut TcpStream) {
+        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
+        tcp_write_safe(&self.cursor.to_be_bytes(), stream);
+        let start: [u8; 1] = if self.start { [1] } else { [0] };
+        tcp_write_safe(&start, stream);
     }
 }

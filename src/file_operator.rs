@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{Read, Seek, Result};
+use std::io::{Read, Seek, Result, SeekFrom};
 
 #[derive(Debug)]
 pub struct FileFeeder {
@@ -51,6 +51,11 @@ impl FileFeeder {
         self.length
     }
 
+    // it doesn't modify anything
+    pub fn set_cursor_pos(&mut self, cursor: u64) {
+        let offset = SeekFrom::Start(cursor);
+        self.file.seek(offset).expect("When does it fail?");
+    }
     // it doesn't modify anything
     fn cursor_pos(&mut self) -> u64 {
         self.file.stream_position()
