@@ -4,7 +4,7 @@ use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::thread;
 use std::time::{Duration, Instant};
 use crate::file_operator::FileFeeder;
-use crate::packet;
+use crate::{packet, util};
 use crate::packet::{FileOfferPacket, FilePacket, MB_1, Packet, PingPacket, SpeedPacket};
 
 fn new_tcp_connection(port: u16) -> (TcpStream, TcpStream) {
@@ -126,6 +126,24 @@ fn file_test() {
 }
 
 #[test]
+fn format_seconds_test() {
+    let format = util::format_time(59.3);
+    assert_eq!("59.3s", format!("{format}"));
+}
+
+#[test]
+fn format_one_hour_test() {
+    let format = util::format_time(3600.0);
+    assert_eq!("1.0h", format!("{format}"));
+}
+
+#[test]
+fn format_two_hours_test() {
+    let format = util::format_time(7200.0);
+    assert_eq!("2.0h", format!("{format}"));
+}
+
+#[test]
 fn time() {
     println!("{}", packet::epoch_time_now())
 }
@@ -151,7 +169,3 @@ fn interfaces_fetch_test() {
         println!("name = {name} | ip = {ip}");
     }
 }
-
-
-
-

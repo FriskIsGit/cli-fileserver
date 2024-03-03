@@ -299,9 +299,9 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                                 }
                                 let seconds_so_far = start.elapsed().as_secs_f64();
                                 let speed = bytes_read as f64 / MB_1 as f64 / seconds_so_far;
-                                let progress = (current_size as f64 / file_offer.file_size as f64) * 100f64;
-                                let eta = util::eta(bytes_read, file_offer.file_size, speed);
-                                eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta:?}");
+                                let progress = (current_size as f64 / file_offer.file_size as f64) * 100.0;
+                                let eta = util::format_eta(bytes_read, file_offer.file_size, speed);
+                                eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta}");
                             }
                             Err(err) => {
                                 println!("Error at FilePacket::wrap - {err}");
@@ -358,9 +358,9 @@ fn stream_file(path: &str, cursor: u64, stream: &mut TcpStream) {
         cursor += chunk.len();
         let seconds_so_far = start.elapsed().as_secs_f64();
         let speed = bytes_written as f64 / MB_1 as f64 / seconds_so_far;
-        let progress = (cursor as f64 / size_goal as f64) * 100f64;
-        let eta = util::eta(bytes_written, size_goal, speed);
-        eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta:?}");
+        let progress = (cursor as f64 / size_goal as f64) * 100.0;
+        let eta = util::format_eta(bytes_written, size_goal, speed);
+        eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta}");
     }
 
     let elapsed = start.elapsed();
