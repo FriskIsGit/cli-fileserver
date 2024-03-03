@@ -16,6 +16,7 @@ mod packet;
 mod args;
 mod tests;
 mod speedtest;
+mod util;
 
 const PINGS: usize = 100;
 fn main() {
@@ -33,7 +34,7 @@ fn main() {
     match program_args.args[0].to_lowercase().as_str() {
         HOST => {
             if let Some(address) = program_args.address {
-                config.host_address = Some(address);
+                config.host_ip = Some(address);
             }
             if let Some(port) = program_args.port {
                 config.host_port = Some(port);
@@ -42,7 +43,7 @@ fn main() {
         },
         CONNECT => {
             if let Some(address) = program_args.address {
-                config.connect_address = Some(address);
+                config.connect_ip = Some(address);
             }
             if let Some(port) = program_args.port {
                 config.connect_port = Some(port);
@@ -54,7 +55,7 @@ fn main() {
 }
 
 fn client_impl(config: Config) {
-    let target_address = config.connect_address.as_ref().unwrap();
+    let target_address = config.connect_ip.as_ref().unwrap();
     let port = config.connect_port.unwrap();
     println!("Attempting connection to {target_address}");
     let mut stream = match connection::connect_ipv4(target_address, port) {
@@ -72,11 +73,11 @@ fn client_impl(config: Config) {
 
 fn server_impl(mut config: Config) {
     println!("Setting up server");
-    if config.host_address.is_none() {
-        config.host_address = Some(select_local_ip());
+    if config.host_ip.is_none() {
+        config.host_ip = Some(select_local_ip());
     }
 
-    let host_address = config.host_address.as_ref().unwrap();
+    let host_address = config.host_ip.as_ref().unwrap();
     let port = config.host_port.unwrap();
     let listener = connection::create_server(host_address, port);
     let local_address = listener.local_addr().unwrap();
@@ -236,7 +237,7 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                             eprintln!("Denied offer because current size >= offered");
                             return;
                         }
-                        let remaining = packet::format_size(file_offer.file_size - current_size);
+                        let remaining = util::format_size(file_offer.file_size - current_size);
                         println!("Resume downloading {}? {remaining} remaining (y/n)", file_offer.file_name);
                         let ok = read_line().starts_with('y');
                         if ok {
@@ -248,7 +249,7 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                             return;
                         }
                     } else {
-                        let offer_size = packet::format_size(file_offer.file_size);
+                        let offer_size = util::format_size(file_offer.file_size);
                         println!("Download {}?  [{offer_size}] (y/n)", file_offer.file_name);
                         let ok = read_line().starts_with('y');
                         if ok {
@@ -299,7 +300,8 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                                 let seconds_so_far = start.elapsed().as_secs_f64();
                                 let speed = bytes_read as f64 / MB_1 as f64 / seconds_so_far;
                                 let progress = (current_size as f64 / file_offer.file_size as f64) * 100f64;
-                                eprintln!("progress={progress:.2}% ({speed:.2}MB/s)");
+                                let eta = util::eta(bytes_read, file_offer.file_size, speed);
+                                eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta:?}");
                             }
                             Err(err) => {
                                 println!("Error at FilePacket::wrap - {err}");
@@ -343,7 +345,7 @@ fn stream_file(path: &str, cursor: u64, stream: &mut TcpStream) {
     file_feeder.set_cursor_pos(cursor);
     let size_goal = file_feeder.file_size();
     let mut cursor = cursor as usize;
-    let mut bytes_written = 0;
+    let mut bytes_written = 0u64;
     let mut chunk_id = 0;
     let start = Instant::now();
     while file_feeder.has_next_chunk() {
@@ -352,13 +354,13 @@ fn stream_file(path: &str, cursor: u64, stream: &mut TcpStream) {
         packet.write_header(stream);
         packet.write(stream);
         chunk_id += 1;
-        bytes_written += chunk.len();
+        bytes_written += chunk.len() as u64;
         cursor += chunk.len();
         let seconds_so_far = start.elapsed().as_secs_f64();
         let speed = bytes_written as f64 / MB_1 as f64 / seconds_so_far;
         let progress = (cursor as f64 / size_goal as f64) * 100f64;
-
-        eprintln!("progress={progress:.2}% ({speed:.2}MB/s)");
+        let eta = util::eta(bytes_written, size_goal, speed);
+        eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta:?}");
     }
 
     let elapsed = start.elapsed();

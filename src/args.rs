@@ -45,10 +45,10 @@ impl ProgramArgs {
                     Ok(port) => port_arg = Some(port),
                     Err(_) => panic!("Failed to parse port argument!"),
                 }
-            } else if argument.starts_with("-a") && i+1 < length {
+            } else if argument.starts_with("-ip") && i+1 < length {
                 address_arg = Some(args[i+1].to_string());
                 i += 1;
-            } else if argument.starts_with("--address=")  {
+            } else if argument.starts_with("--ip=")  {
                 let Some(equal) = argument.find('=') else {
                     println!("Unrecognized argument: {argument}");
                     continue
@@ -64,7 +64,7 @@ impl ProgramArgs {
         println!("fileserver {HOST} - listen for a connection");
         println!("fileserver {CONNECT} - initiate a connection");
         println!("Additional arguments:");
-        println!("-a, --address=<string>");
+        println!("-ip, --ip=<string>");
         println!("-p, --port=<u16>");
     }
 }

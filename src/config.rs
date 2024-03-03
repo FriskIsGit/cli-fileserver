@@ -3,9 +3,9 @@ use std::time::Duration;
 
 const HOST_AUTO_ACCEPT: &str = "host_auto_accept";
 
-const HOST_ADDR: &str = "host";
+const HOST_IP: &str = "host";
 const HOST_PORT: &str = "host_port";
-const CONNECT_ADDR: &str = "connect";
+const CONNECT_IP: &str = "connect";
 const CONNECT_PORT: &str = "connect_port";
 const WRITE_TIMEOUT: &str = "write_timeout";
 const READ_TIMEOUT: &str = "read_timeout";
@@ -23,9 +23,9 @@ const DEFAULT_PORT: u16 = 10211;
 const DEFAULT_ADDR: &str = "localhost";
 
 pub struct Config {
-    pub host_address: Option<String>,
+    pub host_ip: Option<String>,
     pub host_port: Option<u16>,
-    pub connect_address: Option<String>,
+    pub connect_ip: Option<String>,
     pub connect_port: Option<u16>,
     pub write_timeout: Option<u32>,
     pub read_timeout: Option<u32>,
@@ -35,9 +35,9 @@ pub struct Config {
 impl Config {
     pub fn empty() -> Self {
         Self {
-            host_address: None,
+            host_ip: None,
             host_port: None,
-            connect_address: None,
+            connect_ip: None,
             connect_port: None,
             write_timeout: None,
             read_timeout: None,
@@ -64,8 +64,8 @@ impl Config {
             let key = &line[0..equal_sign];
             let value_str = &line[equal_sign + 1..];
             match key {
-                HOST_ADDR => config.host_address = Some(value_str.to_string()),
-                CONNECT_ADDR => config.connect_address = Some(value_str.to_string()),
+                HOST_IP => config.host_ip = Some(value_str.to_string()),
+                CONNECT_IP => config.connect_ip = Some(value_str.to_string()),
                 HOST_PORT => config.host_port = Some(value_str.parse::<u16>().unwrap()),
                 CONNECT_PORT => config.connect_port = Some(value_str.parse::<u16>().unwrap()),
                 HOST_AUTO_ACCEPT => config.auto_accept = Some(value_str.parse::<bool>().unwrap()),
@@ -88,6 +88,3 @@ impl Config {
         }
     }
 }
-
-
-

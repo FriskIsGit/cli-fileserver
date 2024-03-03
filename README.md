@@ -11,6 +11,6 @@ Every line that doesn't start with a recognized config `key` is skipped
 2. Configure values for either a `host` or a `client` setup
 3. Alternatively pass them as command line arguments
 > Additional arguments: <br>
-   -a, --address=10.0.0.3 <br>
+   -ip, --ip=10.0.0.3 <br>
    -p, --port=5313
 4. Run `fileserver connect` or `fileserver host`

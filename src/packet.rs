@@ -121,17 +121,6 @@ impl FileOfferPacket {
         };
     }
 }
-const UNITS: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
-pub fn format_size(file_size: u64) -> String {
-    let mut value = file_size as f64;
-    let mut unit_index = 0;
-    while value > 1024f64 {
-        value /= 1024f64;
-        unit_index += 1;
-    }
-    let unit = UNITS[unit_index];
-    return format!("{value:.2}{unit}");
-}
 
 impl Packet for FileOfferPacket {
     fn id(&self) -> u32 {
