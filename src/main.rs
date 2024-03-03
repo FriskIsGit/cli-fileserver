@@ -282,8 +282,9 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                             return;
                         }
                         let content_size = packet::read_content_size(stream) as usize;
-
-                        buffer.reserve_exact(content_size - buffer.len());
+                        if content_size > buffer.len() {
+                            buffer.reserve_exact(content_size - buffer.len());
+                        }
                         unsafe { buffer.set_len(content_size); }
                         packet::tcp_read_safe(&mut buffer, stream);
                         match FilePacket::wrap(&buffer) {
