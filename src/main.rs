@@ -301,7 +301,7 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                                 let seconds_so_far = start.elapsed().as_secs_f64();
                                 let speed = bytes_read as f64 / MB_1 as f64 / seconds_so_far;
                                 let progress = (current_size as f64 / file_offer.file_size as f64) * 100.0;
-                                let eta = util::format_eta(bytes_read, file_offer.file_size, speed);
+                                let eta = util::format_eta(current_size, file_offer.file_size, speed);
                                 eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta}");
                             }
                             Err(err) => {
@@ -341,12 +341,11 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
     }
 }
 
-fn stream_file(path: &str, cursor: u64, stream: &mut TcpStream) {
+fn stream_file(path: &str, mut cursor: u64, stream: &mut TcpStream) {
     let mut file_feeder = FileFeeder::new(path, MB_1).expect("Couldn't initialize file reader");
     file_feeder.set_cursor_pos(cursor);
     let size_goal = file_feeder.file_size();
-    let mut cursor = cursor as usize;
-    let mut bytes_written = 0u64;
+    let mut bytes_written: u64 = 0;
     let mut chunk_id = 0;
     let start = Instant::now();
     while file_feeder.has_next_chunk() {
@@ -356,11 +355,11 @@ fn stream_file(path: &str, cursor: u64, stream: &mut TcpStream) {
         packet.write(stream);
         chunk_id += 1;
         bytes_written += chunk.len() as u64;
-        cursor += chunk.len();
+        cursor += chunk.len() as u64;
         let seconds_so_far = start.elapsed().as_secs_f64();
         let speed = bytes_written as f64 / MB_1 as f64 / seconds_so_far;
         let progress = (cursor as f64 / size_goal as f64) * 100.0;
-        let eta = util::format_eta(bytes_written, size_goal, speed);
+        let eta = util::format_eta(cursor, size_goal, speed);
         eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta}");
     }
 
