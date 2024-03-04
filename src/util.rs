@@ -20,35 +20,73 @@ pub fn format_eta(bytes_progress: u64, all_bytes: u64, speed_mb_s: f64) -> Strin
     format_time(seconds)
 }
 
+trait PushU64 {
+    fn push_u64(&mut self, number: u64);
+}
+
+impl PushU64 for String {
+    fn push_u64(&mut self, mut number: u64) {
+        if number == 0 {
+            self.push('0');
+            return;
+        }
+
+        let mut buffer = [0u8; 32];
+        let mut offset = 0;
+
+        while number > 0 {
+            let digit = (number % 10) as u8;
+            number /= 10;
+
+            buffer[offset] = digit;
+            offset += 1;
+        }
+
+        while offset != 0  {
+            offset -= 1;
+            let digit = char::from(buffer[offset] + b'0');
+            self.push(digit);
+        }
+    }
+}
+
 const DAY: f64    = 60.0 * 60.0 * 24.0;
 const HOUR: f64   = 60.0 * 60.0;
 const MINUTE: f64 = 60.0;
 
 pub fn format_time(seconds: f64) -> String {
+    if seconds < 1.0 {
+        return format!("{seconds:.1}s");
+    }
+
     let mut time = seconds;
-    let mut output = String::new();
+    let mut output = String::with_capacity(32);
 
     if time >= DAY {
         let days = (time / DAY) as u64;
         time -= days as f64 * DAY;
-        output = format!("{days}d");
+        output.push_u64(days);
+        output.push('d');
     }
 
     if time >= HOUR {
         let hours = (time / HOUR) as u64;
         time -= hours as f64 * HOUR;
-        output = format!("{output} {hours}h");
+        output.push_u64(hours);
+        output.push('h');
     }
 
     if time >= MINUTE {
         let minutes = (time / MINUTE) as u64;
         time -= minutes as f64 * MINUTE;
-        output = format!("{output} {minutes}m");
+        output.push_u64(minutes);
+        output.push('m');
     }
 
     if time >= 1.0 {
         let seconds = time as u64;
-        output = format!("{output} {seconds}s");
+        output.push_u64(seconds);
+        output.push('s');
     }
 
     return output
