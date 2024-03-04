@@ -20,7 +20,41 @@ pub fn format_eta(bytes_progress: u64, all_bytes: u64, speed_mb_s: f64) -> Strin
     format_time(seconds)
 }
 
+const DAY: f64    = 60.0 * 60.0 * 24.0;
+const HOUR: f64   = 60.0 * 60.0;
+const MINUTE: f64 = 60.0;
+
 pub fn format_time(seconds: f64) -> String {
+    let mut time = seconds;
+    let mut output = String::new();
+
+    if time >= DAY {
+        let days = (time / DAY) as u64;
+        time -= days as f64 * DAY;
+        output = format!("{days}d");
+    }
+
+    if time >= HOUR {
+        let hours = (time / HOUR) as u64;
+        time -= hours as f64 * HOUR;
+        output = format!("{output} {hours}h");
+    }
+
+    if time >= MINUTE {
+        let minutes = (time / MINUTE) as u64;
+        time -= minutes as f64 * MINUTE;
+        output = format!("{output} {minutes}m");
+    }
+
+    if time >= 1.0 {
+        let seconds = time as u64;
+        output = format!("{output} {seconds}s");
+    }
+
+    return output
+}
+
+pub fn format_time_old(seconds: f64) -> String {
     let mut time = seconds;
     let mut unit_index = 0;
     while unit_index < 2 && time >= 60.0 {
