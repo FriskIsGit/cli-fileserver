@@ -34,10 +34,9 @@ impl FileFeeder {
         // or we can quit on EOF error without this logic?
         if cursor + self.buffer.len() as u64 > self.length {
             let desired_size = (self.length - cursor) as usize;
-            // we need to do this again here as opposed to using a variable
-            // or the borrow checker will think this is an attempt at returning a local variable
-            return match self.file.read_exact(&mut self.buffer[0..desired_size]) {
-                Ok(_) => Ok(&self.buffer[0..desired_size]),
+            let buffer = &mut self.buffer[0..desired_size];
+            return match self.file.read_exact(buffer) {
+                Ok(_) => Ok(buffer),
                 Err(err) => Err(err)
             }
         }

@@ -66,21 +66,21 @@ pub fn format_time(seconds: f64) -> String {
         let days = (time / DAY) as u64;
         time -= days as f64 * DAY;
         output.push_u64(days);
-        output.push('d');
+        output.push_str("d ");
     }
 
     if time >= HOUR {
         let hours = (time / HOUR) as u64;
         time -= hours as f64 * HOUR;
         output.push_u64(hours);
-        output.push('h');
+        output.push_str("h ");
     }
 
     if time >= MINUTE {
         let minutes = (time / MINUTE) as u64;
         time -= minutes as f64 * MINUTE;
         output.push_u64(minutes);
-        output.push('m');
+        output.push_str("m ");
     }
 
     if time >= 1.0 {
