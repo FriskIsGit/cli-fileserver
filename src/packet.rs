@@ -278,44 +278,6 @@ impl Packet for PingPacket {
     }
 }
 
-pub struct ResponsePacket {
-    // id=0 should be used for errors
-    pub transaction_id: u64,
-    pub accepted: bool
-}
-impl ResponsePacket {
-    pub const ID: u32 = 600_000;
-    pub fn new(id: u64, ok: bool) -> Self {
-        Self { transaction_id: id, accepted: ok}
-    }
-
-    pub fn from_bytes(field_bytes: &[u8]) -> Self {
-        if field_bytes.len() < 9 {
-            eprintln!("Packet is {} bytes in length but 9 were expected", field_bytes.len());
-            return Self::new(0, false);
-        }
-        let id_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
-        let transaction_id = u64::from_be_bytes(id_bytes);
-        let accepted = field_bytes[8] == 1;
-        Self { transaction_id, accepted }
-    }
-}
-impl Packet for ResponsePacket {
-    fn id(&self) -> u32 {
-        ResponsePacket::ID
-    }
-
-    fn size(&self) -> u32 {
-        8 + 1
-    }
-
-    fn write(&self, stream: &mut TcpStream) -> std::io::Result<()> {
-        let write_result = tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
-        let acceptance: [u8; 1] = if self.accepted { [1] } else { [0] };
-        write_result.and(tcp_write_safe(&acceptance, stream))
-    }
-}
-
 pub struct BeginUploadPacket {
     pub transaction_id: u64,
     pub cursor: u64,

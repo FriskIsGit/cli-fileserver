@@ -14,6 +14,7 @@ mod config;
 mod file_operator;
 mod packet;
 mod args;
+#[cfg(test)]
 mod tests;
 mod speedtest;
 mod util;
@@ -157,7 +158,7 @@ fn established_connection_stage(mut stream: TcpStream) {
                 continue
             }
             let file_name = Path::new(file_path).file_name().unwrap().to_str().unwrap();
-            let upload = send_offer_and_read_response(file_path, &file_name, &mut stream);
+            let upload = send_offer_and_read_response(file_path, file_name, &mut stream);
             if upload.start {
                 println!("File was accepted.");
                 stream_file(file_path, upload.cursor, &mut stream);
@@ -294,7 +295,7 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                     buffer.reserve_exact(content_size - buffer.len());
                 }
                 unsafe { buffer.set_len(content_size); }
-                if let Err(_) = packet::tcp_read_safe(&mut buffer, stream) {
+                if packet::tcp_read_safe(&mut buffer, stream).is_err() {
                     eprintln!("Terminating read since buffer couldn't be filled");
                     let _ = stream.shutdown(Shutdown::Read);
                     return;
@@ -367,7 +368,7 @@ fn stream_file(path: &str, mut cursor: u64, stream: &mut TcpStream) {
     while file_feeder.has_next_chunk() {
         let chunk = file_feeder.read_next_chunk().expect("No next chunk");
         let packet = FilePacket::new(1, chunk_id, chunk);
-        if let Err(_) = packet.write_header(stream).and(packet.write(stream)) {
+        if packet.write_header(stream).and(packet.write(stream)).is_err() {
             println!("Upload couldn't complete");
             break;
         }

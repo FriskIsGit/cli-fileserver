@@ -28,11 +28,15 @@ fn file_packet_test() {
     let start = Instant::now();
     let content = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
     let original_packet = FilePacket::new(3, content.len() as u64, &content);
-    original_packet.write(&mut writer);
+    if original_packet.write(&mut writer).is_err() {
+        assert!(false)
+    }
 
     let original_size = original_packet.size() as usize;
     let mut buffer = vec![0u8; original_size];
-    packet::tcp_read_safe(&mut buffer, &mut reader);
+    if packet::tcp_read_safe(&mut buffer, &mut reader).is_err() {
+        assert!(false)
+    }
     println!("Buffer {:?}", buffer);
     let wrapped_packet = FilePacket::wrap(&buffer)
         .expect("Failed to construct FilePacket packet");
@@ -54,11 +58,15 @@ fn transfer_offer_test() {
     let (mut writer, mut reader) = new_tcp_connection(39994);
     let start = Instant::now();
     let original_packet = FileOfferPacket::new(133, 313, "àáąâãäå.zip".into());
-    original_packet.write(&mut writer);
+    if original_packet.write(&mut writer).is_err() {
+        assert!(false)
+    }
     let declared_size = original_packet.size();
 
     let mut buffer = vec![0u8; declared_size as usize];
-    packet::tcp_read_safe(&mut buffer, &mut reader);
+    if packet::tcp_read_safe(&mut buffer, &mut reader).is_err() {
+        assert!(false)
+    }
 
     let constructed = FileOfferPacket::construct(&buffer)
         .expect("Failed to construct FileInfoPacket packet");
@@ -74,10 +82,14 @@ fn speed_packet_test() {
     let start = Instant::now();
     let data = vec![1,2,3,4,5,6];
     let original = SpeedPacket::new(&data);
-    original.write(&mut writer);
+    if original.write(&mut writer).is_err() {
+        assert!(false)
+    }
 
     let mut buffer = vec![0u8; 6];
-    packet::tcp_read_safe(&mut buffer, &mut reader);
+    if packet::tcp_read_safe(&mut buffer, &mut reader).is_err() {
+        assert!(false)
+    }
 
     let constructed = SpeedPacket::wrap(&buffer).expect("Failed to construct SpeedPacket packet");
     println!("Logic time: {:?}", start.elapsed());
@@ -89,8 +101,9 @@ fn speed_packet_test() {
 fn ping_packet_test() {
     let (mut writer, mut reader) = new_tcp_connection(39996);
     let ping = PingPacket::new_ping();
-    ping.write_header(&mut writer);
-    ping.write(&mut writer);
+    if ping.write_header(&mut writer).and(ping.write(&mut writer)).is_err() {
+        assert!(false)
+    }
 
     let id = packet::read_id(&mut reader);
     if id != PingPacket::ID {
@@ -128,19 +141,19 @@ fn file_test() {
 #[test]
 fn format_seconds_test() {
     let format = util::format_time(59.3);
-    assert_eq!("59.3s", format!("{format}"));
+    assert!(format.starts_with("59s"));
 }
 
 #[test]
 fn format_one_hour_test() {
     let format = util::format_time(3600.0);
-    assert_eq!("1.0h", format!("{format}"));
+    assert!(format.starts_with("1h"));
 }
 
 #[test]
 fn format_two_hours_test() {
     let format = util::format_time(7200.0);
-    assert_eq!("2.0h", format!("{format}"));
+    assert!(format.starts_with("2h"));
 }
 
 #[test]

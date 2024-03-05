@@ -31,7 +31,7 @@ pub fn speedtest_out(stream: &mut TcpStream) {
 
     let start = Instant::now();
     for i in 1..=SPEEDTEST_TRANSFERS {
-        if let Err(err) = packet.write_header(stream).and(packet.write(stream)) {
+        if packet.write_header(stream).and(packet.write(stream)).is_err() {
             break;
         }
 
@@ -52,7 +52,7 @@ pub fn speedtest_out(stream: &mut TcpStream) {
 }
 
 
-pub fn speedtest_in(mut stream: &mut TcpStream) {
+pub fn speedtest_in(stream: &mut TcpStream) {
     let megabytes_in_packet = SPEED_PACKET_SIZE as f64 / MB_1 as f64;
 
     println!("Awaiting ping..");
@@ -118,7 +118,7 @@ fn read_ping_and_measure(stream: &mut TcpStream, ping_start: Instant) -> Elapsed
 }
 
 fn write_test_start(stream: &mut TcpStream, start: u64) {
-    let mut start_packet = SpeedtestInfoPacket::new_with_start(start);
+    let start_packet = SpeedtestInfoPacket::new_with_start(start);
     let _ = start_packet.write_header(stream);
     let _ = start_packet.write(stream);
 }
@@ -131,7 +131,7 @@ fn read_test_start(stream: &mut TcpStream) -> u64 {
         eprintln!("ID {id} wasn't expected at this time");
     }
     let mut field_buffer = vec![0u8; packet_size as usize];
-    packet::tcp_read_safe(&mut field_buffer, stream);
+    let _ = packet::tcp_read_safe(&mut field_buffer, stream);
 
     SpeedtestInfoPacket::get_start_time(&field_buffer)
 }
