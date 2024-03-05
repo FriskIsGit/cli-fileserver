@@ -141,6 +141,7 @@ impl Packet for FileOfferPacket {
 // FILE PACKET
 pub struct FilePacket<'r> {
     pub transaction_id: u64,
+    // the first chunk id should always be 0 when a transfer begins or is resumed
     pub chunk_id: u64,
     pub file_bytes: &'r [u8],
 }
