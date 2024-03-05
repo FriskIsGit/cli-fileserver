@@ -6,7 +6,7 @@ use std::time::{Instant};
 use crate::args::{CONNECT, ProgramArgs, HOST};
 use crate::config::Config;
 use crate::file_operator::FileFeeder;
-use crate::packet::{BeginUploadPacket, FileOfferPacket, FilePacket, MB_1, Packet, PingPacket, ResponsePacket, SpeedPacket};
+use crate::packet::{BeginUploadPacket, FileOfferPacket, FilePacket, MB_1, Packet, PingPacket, SpeedPacket};
 use crate::speedtest::{round_trip_time, speedtest_in, speedtest_out};
 
 mod connection;
@@ -200,8 +200,9 @@ fn send_offer_and_read_response(file_path: &str, file_name: &str, stream: &mut T
     };
 
     let offer = FileOfferPacket::new(1, metadata.len(), file_name.to_string());
-    offer.write_header(stream);
-    offer.write(stream);
+    let _ = offer.write_header(stream);
+    let _ = offer.write(stream);
+
     println!("Sent offer");
     let id = packet::read_id(stream);
     if id != BeginUploadPacket::ID {
@@ -211,7 +212,7 @@ fn send_offer_and_read_response(file_path: &str, file_name: &str, stream: &mut T
     let packet_size = packet::read_content_size(stream);
 
     let mut field_buffer = vec![0u8; packet_size as usize];
-    packet::tcp_read_safe(&mut field_buffer, stream);
+    let _ = packet::tcp_read_safe(&mut field_buffer, stream);
 
     BeginUploadPacket::from_bytes(&field_buffer)
 }
@@ -221,7 +222,7 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
     let packet_size = packet::read_content_size(stream);
 
     let mut field_buffer = vec![0u8; packet_size as usize];
-    packet::tcp_read_safe(&mut field_buffer, stream);
+    let _ = packet::tcp_read_safe(&mut field_buffer, stream);
     match id {
         FileOfferPacket::ID => {
             let file_offer = match FileOfferPacket::construct(&field_buffer) {
@@ -247,8 +248,8 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                 let ok = read_line().starts_with('y');
                 if ok {
                     let denied_packet = BeginUploadPacket::accept(file_offer.transaction_id, current_size);
-                    denied_packet.write_header(stream);
-                    denied_packet.write(stream);
+                    let _ = denied_packet.write_header(stream);
+                    let _ = denied_packet.write(stream);
                 } else {
                     write_denied_packet(stream);
                     return;
@@ -264,8 +265,8 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                         return;
                     }
                     let denied_packet = BeginUploadPacket::accept(file_offer.transaction_id, 0);
-                    denied_packet.write_header(stream);
-                    denied_packet.write(stream);
+                    let _ = denied_packet.write_header(stream);
+                    let _ = denied_packet.write(stream);
                 } else {
                     write_denied_packet(stream);
                     return;
@@ -293,12 +294,16 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                     buffer.reserve_exact(content_size - buffer.len());
                 }
                 unsafe { buffer.set_len(content_size); }
-                packet::tcp_read_safe(&mut buffer, stream);
+                if let Err(_) = packet::tcp_read_safe(&mut buffer, stream) {
+                    eprintln!("Terminating read since buffer couldn't be filled");
+                    let _ = stream.shutdown(Shutdown::Read);
+                    return;
+                }
                 let packet = match FilePacket::wrap(&buffer) {
                     Ok(file_packet) => file_packet,
                     Err(err) => {
                         eprintln!("Error at FilePacket::wrap - {err}");
-                        eprintln!("Terminating read since packet wasn't transferred fully..");
+                        eprintln!("Terminating read since packet was made incorrectly..");
                         let _ = stream.shutdown(Shutdown::Read);
                         return;
                     }
@@ -362,8 +367,11 @@ fn stream_file(path: &str, mut cursor: u64, stream: &mut TcpStream) {
     while file_feeder.has_next_chunk() {
         let chunk = file_feeder.read_next_chunk().expect("No next chunk");
         let packet = FilePacket::new(1, chunk_id, chunk);
-        packet.write_header(stream);
-        packet.write(stream);
+        if let Err(_) = packet.write_header(stream).and(packet.write(stream)) {
+            println!("Upload couldn't complete");
+            break;
+        }
+
         chunk_id += 1;
         bytes_written += chunk.len() as u64;
         cursor += chunk.len() as u64;
@@ -380,8 +388,8 @@ fn stream_file(path: &str, mut cursor: u64, stream: &mut TcpStream) {
 
 pub fn write_ping(stream: &mut TcpStream) {
     let ping = PingPacket::new_ping();
-    ping.write_header(stream);
-    ping.write(stream);
+    let _ = ping.write_header(stream);
+    let _ = ping.write(stream);
 }
 
 fn read_ping(stream: &mut TcpStream) {
@@ -392,11 +400,11 @@ fn read_ping(stream: &mut TcpStream) {
         eprintln!("ID {id} wasn't expected at this time");
     }
     let mut field_buffer = vec![0u8; packet_size as usize];
-    packet::tcp_read_safe(&mut field_buffer, stream)
+    let _ = packet::tcp_read_safe(&mut field_buffer, stream);
 }
 
 pub fn write_denied_packet(stream: &mut TcpStream) {
     let denied_packet = BeginUploadPacket::deny();
-    denied_packet.write_header(stream);
-    denied_packet.write(stream);
+    let _ = denied_packet.write_header(stream);
+    let _ = denied_packet.write(stream);
 }

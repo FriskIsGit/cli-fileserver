@@ -28,22 +28,22 @@ pub trait Packet {
     fn size(&self) -> u32;
 
     // Every packet must serialize itself
-    fn write(&self, stream: &mut TcpStream);
+    fn write(&self, stream: &mut TcpStream) -> Result<(), std::io::Error>;
 
     // The default header impl, don't override
-    fn write_header(&self, stream: &mut TcpStream) {
-        tcp_write_safe(&self.id().to_be_bytes(), stream);
-        tcp_write_safe(&self.size().to_be_bytes(), stream);
+    fn write_header(&self, stream: &mut TcpStream) -> Result<(), std::io::Error> {
+        tcp_write_safe(&self.id().to_be_bytes(), stream)
+            .and(tcp_write_safe(&self.size().to_be_bytes(), stream))
     }
 }
 
 
-pub fn tcp_write_safe(mut data: &[u8], stream: &mut TcpStream) {
+pub fn tcp_write_safe(mut data: &[u8], stream: &mut TcpStream) -> Result<(), std::io::Error> {
     loop {
         match stream.write(data) {
             Ok(written) => {
                 if written == data.len() {
-                    return;
+                    return Ok(());
                 }
                 data = &data[written..];
             }
@@ -52,19 +52,19 @@ pub fn tcp_write_safe(mut data: &[u8], stream: &mut TcpStream) {
                 eprintln!("Error \"{kind}\" occurred when writing to socket - {err}");
                 if kind != ErrorKind::Interrupted {
                     // anything other than Interrupted is not salvageable
-                    return;
+                    return Err(err);
                 }
             }
         }
     }
 }
 
-pub fn tcp_read_safe(mut buffer: &mut [u8], stream: &mut TcpStream) {
+pub fn tcp_read_safe(mut buffer: &mut [u8], stream: &mut TcpStream) -> std::io::Result<()> {
     loop {
         match stream.read(buffer) {
             Ok(read) => {
                 if read == buffer.len() {
-                    return;
+                    return Ok(());
                 }
                 buffer = &mut buffer[read..];
             }
@@ -73,7 +73,7 @@ pub fn tcp_read_safe(mut buffer: &mut [u8], stream: &mut TcpStream) {
                 eprintln!("Error \"{kind}\" occurred when reading from socket - {err}");
                 if kind != ErrorKind::Interrupted {
                     // anything other than Interrupted is not salvageable
-                    return;
+                    return Err(err);
                 }
             }
         }
@@ -82,13 +82,13 @@ pub fn tcp_read_safe(mut buffer: &mut [u8], stream: &mut TcpStream) {
 
 pub fn read_id(stream: &mut TcpStream) -> u32 {
     let mut id_bytes = [0u8; 4];
-    tcp_read_safe(&mut id_bytes, stream);
+    let _ = tcp_read_safe(&mut id_bytes, stream);
     u32::from_be_bytes(id_bytes)
 }
 
 pub fn read_content_size(stream: &mut TcpStream) -> u32 {
     let mut size_bytes = [0u8; 4];
-    tcp_read_safe(&mut size_bytes, stream);
+    let _ = tcp_read_safe(&mut size_bytes, stream);
     u32::from_be_bytes(size_bytes)
 }
 
@@ -131,10 +131,10 @@ impl Packet for FileOfferPacket {
         (8 + 8 + self.file_name.len()) as u32
     }
 
-    fn write(&self, stream: &mut TcpStream) {
-        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
-        tcp_write_safe(&self.file_size.to_be_bytes(), stream);
-        tcp_write_safe(self.file_name.as_bytes(), stream);
+    fn write(&self, stream: &mut TcpStream) -> Result<(), std::io::Error> {
+        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream)
+            .and(tcp_write_safe(&self.file_size.to_be_bytes(), stream))
+            .and(tcp_write_safe(self.file_name.as_bytes(), stream))
     }
 }
 
@@ -177,10 +177,10 @@ impl<'r> Packet for FilePacket<'r> {
         (8 + 8 + self.file_bytes.len()) as u32
     }
 
-    fn write(&self, stream: &mut TcpStream) {
-        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
-        tcp_write_safe(&self.chunk_id.to_be_bytes(), stream);
-        tcp_write_safe(self.file_bytes, stream);
+    fn write(&self, stream: &mut TcpStream) -> Result<(), std::io::Error> {
+        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream)
+            .and(tcp_write_safe(&self.chunk_id.to_be_bytes(), stream))
+            .and(tcp_write_safe(self.file_bytes, stream))
     }
 }
 
@@ -209,8 +209,8 @@ impl<'r> Packet for SpeedPacket<'r> {
         self.random_bytes.len() as u32
     }
 
-    fn write(&self, stream: &mut TcpStream) {
-        tcp_write_safe(self.random_bytes, stream);
+    fn write(&self, stream: &mut TcpStream) -> Result<(), std::io::Error>{
+        tcp_write_safe(self.random_bytes, stream)
     }
 }
 
@@ -237,8 +237,8 @@ impl Packet for SpeedtestInfoPacket{
     fn size(&self) -> u32 {
         8u32
     }
-    fn write(&self, stream: &mut TcpStream) {
-        tcp_write_safe(&self.start_time.to_be_bytes(), stream);
+    fn write(&self, stream: &mut TcpStream) -> Result<(), std::io::Error> {
+        tcp_write_safe(&self.start_time.to_be_bytes(), stream)
     }
 }
 
@@ -273,8 +273,8 @@ impl Packet for PingPacket {
         8u32
     }
 
-    fn write(&self, stream: &mut TcpStream) {
-        tcp_write_safe(&self.creation_time.to_be_bytes(), stream);
+    fn write(&self, stream: &mut TcpStream) -> std::io::Result<()>  {
+        tcp_write_safe(&self.creation_time.to_be_bytes(), stream)
     }
 }
 
@@ -309,10 +309,10 @@ impl Packet for ResponsePacket {
         8 + 1
     }
 
-    fn write(&self, stream: &mut TcpStream) {
-        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
+    fn write(&self, stream: &mut TcpStream) -> std::io::Result<()> {
+        let write_result = tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
         let acceptance: [u8; 1] = if self.accepted { [1] } else { [0] };
-        tcp_write_safe(&acceptance, stream);
+        write_result.and(tcp_write_safe(&acceptance, stream))
     }
 }
 
@@ -354,10 +354,10 @@ impl Packet for BeginUploadPacket {
         16 + 1
     }
 
-    fn write(&self, stream: &mut TcpStream) {
-        tcp_write_safe(&self.transaction_id.to_be_bytes(), stream);
-        tcp_write_safe(&self.cursor.to_be_bytes(), stream);
+    fn write(&self, stream: &mut TcpStream) -> std::io::Result<()> {
+        let write_result = tcp_write_safe(&self.transaction_id.to_be_bytes(), stream)
+            .and(tcp_write_safe(&self.cursor.to_be_bytes(), stream));
         let start: [u8; 1] = if self.start { [1] } else { [0] };
-        tcp_write_safe(&start, stream);
+        write_result.and(tcp_write_safe(&start, stream))
     }
 }
