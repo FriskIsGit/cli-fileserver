@@ -1,9 +1,10 @@
+use std::io::{Error, ErrorKind};
 use std::net::TcpStream;
 use rand::Rng;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 use crate::packet::{MB_1, Packet, PingPacket, SpeedPacket, SpeedtestInfoPacket};
-use crate::{packet, read_and_handle_packet};
+use crate::{packet};
 
 // Now all parameters can be changed
 const SPEEDTEST_TRANSFERS: usize = 100;
@@ -32,6 +33,7 @@ pub fn speedtest_out(stream: &mut TcpStream) {
     let start = Instant::now();
     for i in 1..=SPEEDTEST_TRANSFERS {
         if packet.write_header(stream).and(packet.write(stream)).is_err() {
+            eprintln!("Speedtest wasn't completed");
             break;
         }
 
@@ -68,7 +70,11 @@ pub fn speedtest_in(stream: &mut TcpStream) {
 
     let start = Instant::now();
     for i in 1..=SPEEDTEST_TRANSFERS {
-        read_and_handle_packet(stream);
+        if read_speed_packet(stream).is_err() {
+            eprintln!("Speedtest wasn't completed");
+            break;
+        }
+
         let elapsed = start.elapsed();
         let seconds = elapsed.as_millis() as f64 / 1000f64;
 
@@ -140,4 +146,16 @@ fn read_test_start(stream: &mut TcpStream) -> u64 {
 pub fn round_trip_time(stream: &mut TcpStream) -> Elapsed {
     let ping_start = write_ping(stream);
     read_ping_and_measure(stream, ping_start)
+}
+
+pub fn read_speed_packet(stream: &mut TcpStream) -> std::io::Result<()> {
+    let id = packet::read_id(stream);
+    if id != SpeedPacket::ID {
+        let err = Error::new(ErrorKind::InvalidData, "Unexpected packet ID");
+        return Err(err);
+    }
+    let packet_size = packet::read_content_size(stream);
+
+    let mut field_buffer = vec![0u8; packet_size as usize];
+    packet::tcp_read_safe(&mut field_buffer, stream)
 }

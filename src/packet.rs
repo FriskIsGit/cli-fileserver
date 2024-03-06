@@ -80,6 +80,27 @@ pub fn tcp_read_safe(mut buffer: &mut [u8], stream: &mut TcpStream) -> std::io::
     }
 }
 
+const DISCARD_BUF_SIZE: usize = 4096;
+pub fn tcp_discard_bytes(stream: &mut TcpStream) -> usize {
+    let mut buffer = [0u8; DISCARD_BUF_SIZE];
+    let mut cleared = 0;
+    loop {
+        match stream.peek(&mut buffer) {
+            Ok(available) => {
+                if available == 0 {
+                    return cleared;
+                }
+                let min = std::cmp::min(DISCARD_BUF_SIZE, available);
+                if stream.read_exact(&mut buffer[0..min]).is_err() {
+                    return cleared;
+                }
+                cleared += min;
+            }
+            Err(_) => return cleared,
+        };
+    }
+}
+
 pub fn read_id(stream: &mut TcpStream) -> u32 {
     let mut id_bytes = [0u8; 4];
     let _ = tcp_read_safe(&mut id_bytes, stream);

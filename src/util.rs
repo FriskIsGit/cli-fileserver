@@ -1,4 +1,12 @@
 
+pub fn read_line() -> String {
+    let mut buffer = String::new();
+    return match std::io::stdin().read_line(&mut buffer) {
+        Ok(_) => buffer.trim_end().to_string(),
+        Err(_) => "".into(),
+    };
+}
+
 const SIZE_UNITS: [&str; 6] = ["B", "KB", "MB", "GB", "TB", "PB"];
 const MB_1: f64 = 1048576.0;
 

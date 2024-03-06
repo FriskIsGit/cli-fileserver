@@ -2,9 +2,10 @@
 TCP-based file exchange program
 
 ### Config
-Config file is read down line by line <br>
-Absence of a config file or a missing key will cause default values to be applied <br>
-Every line that doesn't start with a recognized config `key` is skipped
+- having a config file is `not required` as long as command line parameters are provided <br>
+- config file is read down line by line so if a key is redefined again it'll be overwritten<br>
+- lines that don't start with any recognized config `key` are not parsed (can be for as comments) <br>
+- when running as `host` without an ip argument the host ip will be automatically assigned
 
 ### Running
 1. Rename `config-example.txt` file to `config.txt`
@@ -13,4 +14,12 @@ Every line that doesn't start with a recognized config `key` is skipped
 > Additional arguments: <br>
    -ip, --ip=10.0.0.3 <br>
    -p, --port=5313
-4. Run `fileserver connect` or `fileserver host`
+>
+
+Run `cargo run connect` or `cargo run host`
+
+### Usage
+- file sharing: `share <path>`, the other end should perform a `read`
+- speedtest: `si` - uploading peer, `so` - downloading peer
+- RTT (round trip time): `rtt 1` - any peer, `rtt 2` - other peer
+- close connection (stream close): `shutdown`
