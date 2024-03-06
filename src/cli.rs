@@ -271,8 +271,9 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                 eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta}");
                 buffer.clear();
             }
-            let elapsed = start.elapsed();
-            println!("Download completed in {:?}", elapsed);
+            let elapsed = start.elapsed().as_secs_f64();
+            let time_format = util::format_time(elapsed);
+            println!("Download completed in {time_format}");
 
         }
         FilePacket::ID => {
@@ -324,8 +325,9 @@ fn stream_file(path: &str, mut cursor: u64, stream: &mut TcpStream) {
         eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta}");
     }
 
-    let elapsed = start.elapsed();
-    println!("Upload completed in {:?}", elapsed);
+    let elapsed = start.elapsed().as_secs_f64();
+    let time_format = util::format_time(elapsed);
+    println!("Upload completed in {time_format}");
 }
 
 pub fn write_ping(stream: &mut TcpStream) {

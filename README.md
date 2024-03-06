@@ -4,7 +4,7 @@ TCP-based file exchange program
 ### Config
 - having a config file is `not required` as long as command line parameters are provided <br>
 - config file is read down line by line so if a key is redefined again it'll be overwritten<br>
-- lines that don't start with any recognized config `key` are not parsed (can be for as comments) <br>
+- lines that don't start with any recognized config `key` are not parsed (can be used for comments) <br>
 - when running as `host` without an ip argument the host ip will be automatically assigned
 
 ### Running
