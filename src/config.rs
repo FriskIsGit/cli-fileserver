@@ -19,9 +19,6 @@ const CONFIG_NAME: &str = "config.txt";
     Quotation marks are not used for sequences of characters
 */
 
-const DEFAULT_PORT: u16 = 10211;
-const DEFAULT_ADDR: &str = "localhost";
-
 pub struct Config {
     pub host_ip: Option<String>,
     pub host_port: Option<u16>,

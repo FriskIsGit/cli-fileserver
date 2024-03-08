@@ -135,7 +135,6 @@ fn established_connection_stage(mut stream: TcpStream) {
     }
 }
 
-type Accepted = bool;
 fn send_offer_and_read_response(file_path: &str, file_name: &str, stream: &mut TcpStream) -> BeginUploadPacket {
     let file = File::open(file_path).expect("File should exist by now");
     let Ok(metadata) = file.metadata() else {

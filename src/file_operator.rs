@@ -1,7 +1,6 @@
 use std::fs::File;
 use std::io::{Read, Seek, Result, SeekFrom};
 
-#[derive(Debug)]
 pub struct FileFeeder {
     file: File,
     length: u64,

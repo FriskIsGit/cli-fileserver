@@ -26,8 +26,8 @@ fn main() {
     // Listen to connections, y/n, if n listen for another connection,
     match program_args.args[0].to_lowercase().as_str() {
         HOST => {
-            if let Some(address) = program_args.address {
-                config.host_ip = Some(address);
+            if let Some(host_ip) = program_args.ip {
+                config.host_ip = Some(host_ip);
             }
             if let Some(port) = program_args.port {
                 config.host_port = Some(port);
@@ -35,8 +35,8 @@ fn main() {
             cli::server_impl(config)
         },
         CONNECT => {
-            if let Some(address) = program_args.address {
-                config.connect_ip = Some(address);
+            if let Some(ip) = program_args.ip {
+                config.connect_ip = Some(ip);
             }
             if let Some(port) = program_args.port {
                 config.connect_port = Some(port);

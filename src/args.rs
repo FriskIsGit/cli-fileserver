@@ -8,13 +8,12 @@ pub struct ProgramArgs {
     // We can use 'exe' path for determining the relative location of config.txt
     pub exe: String,
     pub args: Vec<String>,
-    pub address: Option<String>,
+    pub ip: Option<String>,
     pub port: Option<u16>,
 }
 
 impl ProgramArgs {
-    pub fn retrieve() -> Self {
-        let mut args: Vec<String> = std::env::args().collect();
+    pub fn parse(mut args: Vec<String>) -> Self {
         if args.is_empty() {
             panic!("Is this possible?")
         }
@@ -26,7 +25,7 @@ impl ProgramArgs {
 
         let length = args.len();
         let mut port_arg = None;
-        let mut address_arg = None;
+        let mut ip_arg = None;
         let mut i = 0;
         while i < length {
             let argument = &args[i];
@@ -46,18 +45,22 @@ impl ProgramArgs {
                     Err(_) => panic!("Failed to parse port argument!"),
                 }
             } else if argument.starts_with("-ip") && i+1 < length {
-                address_arg = Some(args[i+1].to_string());
+                ip_arg = Some(args[i+1].to_string());
                 i += 1;
             } else if argument.starts_with("--ip=")  {
                 let Some(equal) = argument.find('=') else {
                     println!("Unrecognized argument: {argument}");
                     continue
                 };
-                address_arg = Some(argument[equal+1..].to_string())
+                ip_arg = Some(argument[equal+1..].to_string())
             }
             i += 1;
         }
-        Self { exe: exe_path, args, address: address_arg, port: port_arg}
+        Self { exe: exe_path, args, ip: ip_arg, port: port_arg}
+    }
+
+    pub fn retrieve() -> Self {
+        Self::parse(std::env::args().collect())
     }
 
     pub fn print_info() {

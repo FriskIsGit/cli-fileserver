@@ -5,6 +5,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use crate::file_operator::FileFeeder;
 use crate::{packet, util};
+use crate::args::ProgramArgs;
 use crate::packet::{FileOfferPacket, FilePacket, MB_1, Packet, PingPacket, SpeedPacket};
 
 fn new_tcp_connection(port: u16) -> (TcpStream, TcpStream) {
@@ -181,4 +182,30 @@ fn interfaces_fetch_test() {
         let ip = net.1;
         println!("name = {name} | ip = {ip}");
     }
+}
+
+#[test]
+fn command_line_arguments() {
+    // the latter should take precedence
+    let args = vec!["fs.exe", "-p", "1111", "2222", "-p", "5123", "-noise", "-ip", "10.0.0.200"];
+    let args = civilize_vec(args);
+    let mut program_args = ProgramArgs::parse(args);
+    let Some(ip) = program_args.ip else {
+        assert!(false);
+        return;
+    };
+    let Some(port) = program_args.port else {
+        assert!(false);
+        return;
+    };
+    assert_eq!(ip, "10.0.0.200");
+    assert_eq!(port, 5123);
+}
+
+fn civilize_vec(primitive_vec: Vec<&str>) -> Vec<String> {
+    let mut vec = Vec::with_capacity(primitive_vec.len());
+    for el in primitive_vec {
+        vec.push(el.into());
+    }
+    vec
 }
