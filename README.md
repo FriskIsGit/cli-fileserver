@@ -20,7 +20,8 @@ Run `cargo r host` or `cargo r connect`
 3. Alternatively pass them as command line arguments
 > Additional arguments: <br>
    -ip, --ip=10.0.0.3 <br>
-   -p, --port=5313
+   -p, --port=5313 <br>
+   -aa, --auto-accept
 
 
 ### Usage
@@ -28,3 +29,12 @@ Run `cargo r host` or `cargo r connect`
 - speedtest: `si` - downloading peer, `so` - uploading peer
 - RTT (round trip time): `rtt 1` - any peer, `rtt 2` - other peer
 - close connection (stream close): `shutdown`
+
+### Code snippet
+```rust
+pub struct FilePacket<'r> {
+    pub transaction_id: u64,
+    pub chunk_id: u64,
+    pub file_bytes: &'r [u8],
+}
+```

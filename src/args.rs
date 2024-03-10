@@ -10,6 +10,7 @@ pub struct ProgramArgs {
     pub args: Vec<String>,
     pub ip: Option<String>,
     pub port: Option<u16>,
+    pub host_auto_accept: Option<bool>,
 }
 
 impl ProgramArgs {
@@ -26,6 +27,7 @@ impl ProgramArgs {
         let length = args.len();
         let mut port_arg = None;
         let mut ip_arg = None;
+        let mut host_auto_accept = None;
         let mut i = 0;
         while i < length {
             let argument = &args[i];
@@ -36,11 +38,7 @@ impl ProgramArgs {
                 }
                 i += 1;
             } else if argument.starts_with("--port=")  {
-                let Some(equal) = argument.find('=') else {
-                    println!("Unrecognized argument: {argument}");
-                    continue
-                };
-                match argument[equal+1..].parse::<u16>() {
+                match argument[7..].parse::<u16>() {
                     Ok(port) => port_arg = Some(port),
                     Err(_) => panic!("Failed to parse port argument!"),
                 }
@@ -48,15 +46,21 @@ impl ProgramArgs {
                 ip_arg = Some(args[i+1].to_string());
                 i += 1;
             } else if argument.starts_with("--ip=")  {
-                let Some(equal) = argument.find('=') else {
-                    println!("Unrecognized argument: {argument}");
-                    continue
-                };
-                ip_arg = Some(argument[equal+1..].to_string())
+                ip_arg = Some(argument[5..].to_string())
+            }
+            else if argument == "-aa" || argument == "--auto-accept" {
+                host_auto_accept = Some(true);
             }
             i += 1;
         }
-        Self { exe: exe_path, args, ip: ip_arg, port: port_arg}
+        Self { exe: exe_path, args, ip: ip_arg, port: port_arg, host_auto_accept}
+    }
+
+    pub fn str_to_bool(flag: &str) -> bool {
+        match std::str::FromStr::from_str(flag) {
+            Ok(boolean) => boolean,
+            Err(_) => panic!("Not a boolean <{flag}>"),
+        }
     }
 
     pub fn retrieve() -> Self {
@@ -69,5 +73,6 @@ impl ProgramArgs {
         println!("Additional arguments:");
         println!("-ip, --ip=<string>");
         println!("-p, --port=<u16>");
+        println!("-aa, --auto-accept=<bool>");
     }
 }

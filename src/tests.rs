@@ -189,7 +189,7 @@ fn command_line_arguments() {
     // the latter should take precedence
     let args = vec!["fs.exe", "-p", "1111", "2222", "-p", "5123", "-noise", "-ip", "10.0.0.200"];
     let args = civilize_vec(args);
-    let mut program_args = ProgramArgs::parse(args);
+    let program_args = ProgramArgs::parse(args);
     let Some(ip) = program_args.ip else {
         assert!(false);
         return;
@@ -200,6 +200,14 @@ fn command_line_arguments() {
     };
     assert_eq!(ip, "10.0.0.200");
     assert_eq!(port, 5123);
+}
+
+#[test]
+fn host_auto_accept_test() {
+    let args = vec!["fs.exe", "-aa"];
+    let args = civilize_vec(args);
+    let program_args = ProgramArgs::parse(args);
+    assert_eq!(program_args.host_auto_accept, Some(true));
 }
 
 fn civilize_vec(primitive_vec: Vec<&str>) -> Vec<String> {

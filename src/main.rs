@@ -32,6 +32,9 @@ fn main() {
             if let Some(port) = program_args.port {
                 config.host_port = Some(port);
             }
+            if let Some(auto_accept) = program_args.host_auto_accept {
+                config.auto_accept = Some(auto_accept);
+            }
             cli::server_impl(config)
         },
         CONNECT => {
