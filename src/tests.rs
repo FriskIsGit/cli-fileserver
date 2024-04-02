@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use crate::file_operator::FileFeeder;
 use crate::{packet, util};
 use crate::args::ProgramArgs;
-use crate::packet::{FileOfferPacket, FilePacket, MB_1, Packet, PingPacket, SpeedPacket};
+use crate::packet::{DirectoryOfferPacket, FileOfferPacket, FilePacket, MB_1, Packet, PingPacket, SpeedPacket};
 
 fn new_tcp_connection(port: u16) -> (TcpStream, TcpStream) {
     let addr = format!("127.0.0.1:{port}");
@@ -216,4 +216,37 @@ fn civilize_vec(primitive_vec: Vec<&str>) -> Vec<String> {
         vec.push(el.into());
     }
     vec
+}
+
+#[test]
+fn directory_offer_test() {
+    let (mut writer, mut reader) = new_tcp_connection(39994);
+    let start = Instant::now();
+    let original_packet = DirectoryOfferPacket::new("target");
+    if original_packet.write_header(&mut writer)
+        .or(original_packet.write(&mut writer)).is_err() {
+        assert!(false)
+    }
+
+    let id = packet::read_id(&mut reader);
+    let packet_size = packet::read_content_size(&mut reader);
+
+    let mut field_buffer = vec![0u8; packet_size as usize];
+    if packet::tcp_read_safe(&mut field_buffer, &mut reader).is_err() {
+        assert!(false)
+    }
+    if id != DirectoryOfferPacket::ID {
+        assert!(false)
+    }
+    println!("Elapsed {:.2}ms", start.elapsed().as_millis());
+    let offer_packet = DirectoryOfferPacket::from_bytes(&field_buffer);
+    println!("Dir size: {} | File name: {} | File count: {}",
+             util::format_size(offer_packet.total_size),
+             offer_packet.name,
+             offer_packet.file_count,
+    );
+    for file in offer_packet.files {
+        println!("{} {}", file.name, util::format_size(file.size));
+    }
+
 }

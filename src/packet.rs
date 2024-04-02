@@ -10,9 +10,11 @@ PACKET STRUCTURE FORMAT:
     packet max size ~ 4.29 GB
 */
 
+use std::fs;
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
 use std::time::{SystemTime};
+use crate::util;
 
 pub const KB_125: usize = 128000;
 pub const KB_512: usize = 524288;
@@ -342,5 +344,128 @@ impl Packet for BeginUploadPacket {
             .and(tcp_write_safe(&self.cursor.to_be_bytes(), stream));
         let start: [u8; 1] = if self.start { [1] } else { [0] };
         write_result.and(tcp_write_safe(&start, stream))
+    }
+}
+
+
+pub struct FileInfo {
+    pub size: u64,
+    name_size: u64,
+    pub name: String,
+}
+impl FileInfo {
+    pub fn new(name: String, size: u64) -> Self {
+        Self { size, name_size: name.len() as u64, name, }
+    }
+}
+pub struct DirectoryOfferPacket {
+    pub total_size: u64,
+    pub file_count: u64,
+    pub name_size: u64,
+    pub name: String,
+    pub files: Vec<FileInfo>
+}
+impl DirectoryOfferPacket {
+    pub const ID: u32 = 800_000;
+
+    pub fn new(directory_path: &str) -> Self {
+        let dir_name = util::get_path_name(directory_path).to_string();
+        let Ok (entries) = fs::read_dir(directory_path) else {
+            eprintln!("Failed to create DirectoryOfferPacket");
+            return Self::empty();
+        };
+
+        let mut total_size: u64 = 0;
+        let mut files = vec![];
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if !path.is_file() {
+                continue
+            }
+            let Ok(metadata) = path.metadata() else {
+                eprintln!("Skipping entry, unable to retrieve metadata");
+                continue
+            };
+            let size = metadata.len();
+            total_size += size;
+            let entry_name = path.file_name().unwrap().to_str().unwrap().to_string();
+            let file_info = FileInfo::new(entry_name, size);
+            files.push(file_info);
+        }
+
+        let file_count: u64 = files.len() as u64;
+        let name_size = dir_name.len() as u64;
+        Self { total_size, file_count, name_size, name: dir_name, files }
+    }
+
+    pub fn from_bytes(field_bytes: &[u8]) -> Self {
+        if field_bytes.len() < 8*3 + 1 {
+            eprintln!("Packet is too small to be deserialized");
+            return Self::empty();
+        }
+        let size_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
+        let total_size = u64::from_be_bytes(size_bytes);
+
+        let count_bytes: [u8; 8] = field_bytes[8..16].try_into().unwrap();
+        let file_count = u64::from_be_bytes(count_bytes);
+
+        let name_size_bytes: [u8; 8] = field_bytes[16..24].try_into().unwrap();
+        let name_size = u64::from_be_bytes(name_size_bytes);
+
+        let after_name = (24 + name_size) as usize;
+        let name_bytes = field_bytes[24..after_name].to_vec();
+        let dir_name = String::from_utf8(name_bytes).expect("Failed to decode file name");
+
+        let mut files_bytes = &field_bytes[after_name..];
+        let mut files = Vec::with_capacity(file_count as usize);
+        for _ in 0..file_count {
+            let size_bytes: [u8; 8] = files_bytes[0..8].try_into().unwrap();
+            let size = u64::from_be_bytes(size_bytes);
+
+            let name_size_bytes: [u8; 8] = files_bytes[8..16].try_into().unwrap();
+            let name_size = u64::from_be_bytes(name_size_bytes);
+
+            let packet_end = (16 + name_size) as usize;
+            let name_bytes = files_bytes[16..packet_end].to_vec();
+            let name = String::from_utf8(name_bytes).expect("Failed to decode file name");
+            let file_info = FileInfo { size, name_size, name };
+            files.push(file_info);
+            files_bytes = &files_bytes[packet_end..]
+        }
+
+        Self { total_size, file_count, name_size, name: dir_name, files }
+    }
+
+    pub fn empty() -> Self {
+        Self { total_size: 0, file_count: 0, name_size: 0, name: "".into(), files: vec![]}
+    }
+}
+impl Packet for DirectoryOfferPacket {
+    fn id(&self) -> u32 {
+        DirectoryOfferPacket::ID
+    }
+
+    fn size(&self) -> u32 {
+        let mut size = 24 + self.name_size;
+        for file in &self.files {
+            size += 8 * 2;
+            size += file.name_size;
+        }
+        size as u32
+    }
+
+    fn write(&self, stream: &mut TcpStream) -> std::io::Result<()> {
+        let mut write_result = tcp_write_safe(&self.total_size.to_be_bytes(), stream)
+            .and(tcp_write_safe(&self.file_count.to_be_bytes(), stream))
+            .and(tcp_write_safe(&self.name_size.to_be_bytes(), stream))
+            .and(tcp_write_safe(self.name.as_bytes(), stream));
+
+        for file in &self.files {
+            write_result = write_result
+                .and(tcp_write_safe(&file.size.to_be_bytes(), stream))
+                .and(tcp_write_safe(&file.name_size.to_be_bytes(), stream))
+                .and(tcp_write_safe(file.name.as_bytes(), stream))
+        }
+        write_result
     }
 }

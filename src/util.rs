@@ -98,3 +98,13 @@ pub fn format_time(seconds: f64) -> String {
 
     return output
 }
+
+pub fn get_path_name(path: &str) -> &str {
+    let Some(path_name) = std::path::Path::new(path).file_name() else {
+        return "Unknown";
+    };
+    let Some(path_name_str) = path_name.to_str() else {
+        return "Unknown";
+    };
+    return path_name_str;
+}

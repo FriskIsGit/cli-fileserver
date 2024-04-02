@@ -103,7 +103,7 @@ fn established_connection_stage(mut stream: TcpStream) {
                 eprintln!("File is a directory");
                 continue
             }
-            let file_name = Path::new(file_path).file_name().unwrap().to_str().unwrap();
+            let file_name = util::get_path_name(file_path);
             let upload = send_offer_and_read_response(file_path, file_name, &mut stream);
             if upload.start {
                 println!("File was accepted.");
