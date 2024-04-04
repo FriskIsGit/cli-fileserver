@@ -24,7 +24,8 @@ fn main() {
     }
 
     // Listen to connections, y/n, if n listen for another connection,
-    let mode = program_args.args[0].to_lowercase().as_str();
+    let mode = program_args.args[0].to_lowercase();
+    let mode = mode.as_str();
     if HOST.starts_with(mode) {
         if let Some(host_ip) = program_args.ip {
             config.host_ip = Some(host_ip);
