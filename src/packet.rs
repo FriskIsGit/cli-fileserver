@@ -115,6 +115,12 @@ pub fn read_content_size(stream: &mut TcpStream) -> u32 {
     u32::from_be_bytes(size_bytes)
 }
 
+pub fn read_into_new_buffer(stream: &mut TcpStream, content_size: u32) -> Vec<u8> {
+    let mut buffer = vec![0u8; content_size as usize];
+    let _ = tcp_read_safe(&mut buffer, stream);
+    return buffer;
+}
+
 // PACKET STRUCT IMPLEMENTATIONS
 pub struct FileOfferPacket {
     pub transaction_id: u64,
@@ -303,31 +309,67 @@ impl Packet for PingPacket {
 
 pub struct BeginUploadPacket {
     pub transaction_id: u64,
-    pub cursor: u64,
-    pub start: bool, // if file was denied -> false
+    pub files_accepted: u32,
+    // files_accepted == file_indexes.len() == cursors.len()
+    pub file_indexes: Vec<u32>, // 0-indexed
+    pub cursors: Vec<u64>,
 }
 impl BeginUploadPacket {
-    pub const ID: u32 = 700_000;
-    pub fn accept(id: u64, cursor: u64) -> Self {
-        Self { transaction_id: id, cursor, start: true }
+    pub const ID: u32 = 800_000;
+
+    pub fn single_file(transaction_id: u64, cursor: u64) -> Self {
+        let file_indexes = vec![0u32];
+        let cursors = vec![cursor];
+        Self { transaction_id, files_accepted: 1, file_indexes, cursors }
     }
-    pub fn deny() -> Self {
-        Self { transaction_id: 0, cursor: 0, start: false }
+    pub fn has_any_files(&self) -> bool {
+        self.files_accepted > 0 && self.file_indexes.len() > 0 && self.cursors.len() > 0
+    }
+
+    pub fn new(transaction_id: u64, file_indexes: Vec<u32>, cursors: Vec<u64>) -> Self {
+        if file_indexes.len() != cursors.len() {
+            panic!("ERROR: To ensure data integrity file_indexes & cursors must be the same length");
+        }
+        let files_accepted = file_indexes.len() as u32;
+        if files_accepted == 0 {
+            return Self::new_empty();
+        }
+        Self { transaction_id, files_accepted, file_indexes, cursors }
+    }
+
+    pub fn new_empty() -> Self {
+        Self { transaction_id: 0, files_accepted: 0, file_indexes: vec![], cursors: vec![] }
     }
 
     pub fn from_bytes(field_bytes: &[u8]) -> Self {
-        if field_bytes.len() < 9 {
-            eprintln!("Packet is {} bytes in length but 9 were expected", field_bytes.len());
-            return Self::deny();
+        if field_bytes.len() < 12 {
+            eprintln!("Packet was too small");
+            return Self::new_empty();
         }
         let id_bytes: [u8; 8] = field_bytes[0..8].try_into().unwrap();
         let transaction_id = u64::from_be_bytes(id_bytes);
 
-        let cursor_bytes: [u8; 8] = field_bytes[8..16].try_into().unwrap();
-        let cursor = u64::from_be_bytes(cursor_bytes);
+        let files_accepted_bytes: [u8; 4] = field_bytes[8..12].try_into().unwrap();
+        let files_accepted = u32::from_be_bytes(files_accepted_bytes);
 
-        let start = field_bytes[16] == 1;
-        Self { transaction_id, cursor, start }
+        let mut file_indexes = Vec::with_capacity(files_accepted as usize);
+        let mut offset = 12;
+        for _ in 0..files_accepted {
+            let index_bytes: [u8; 4] = field_bytes[offset..offset + 4].try_into().unwrap();
+            let index = u32::from_be_bytes(index_bytes);
+            file_indexes.push(index);
+            offset += 4;
+        }
+
+        let mut cursors = Vec::with_capacity(files_accepted as usize);
+        for _ in 0..files_accepted {
+            let cursor_bytes: [u8; 8] = field_bytes[offset..offset + 8].try_into().unwrap();
+            let cursor = u64::from_be_bytes(cursor_bytes);
+            cursors.push(cursor);
+            offset += 8;
+        }
+
+        Self { transaction_id, files_accepted, file_indexes, cursors }
     }
 }
 impl Packet for BeginUploadPacket {
@@ -336,17 +378,24 @@ impl Packet for BeginUploadPacket {
     }
 
     fn size(&self) -> u32 {
-        16 + 1
+        (8 + 4 + self.file_indexes.len() * 4 + self.cursors.len() * 8) as u32
     }
 
     fn write(&self, stream: &mut TcpStream) -> std::io::Result<()> {
-        let write_result = tcp_write_safe(&self.transaction_id.to_be_bytes(), stream)
-            .and(tcp_write_safe(&self.cursor.to_be_bytes(), stream));
-        let start: [u8; 1] = if self.start { [1] } else { [0] };
-        write_result.and(tcp_write_safe(&start, stream))
+        let mut write_result = tcp_write_safe(&self.transaction_id.to_be_bytes(), stream)
+            .and(tcp_write_safe(&self.files_accepted.to_be_bytes(), stream));
+
+        for i in 0..self.files_accepted {
+            let index: u32 = self.file_indexes[i as usize];
+            write_result = write_result.and(tcp_write_safe(&index.to_be_bytes(), stream))
+        }
+        for i in 0..self.files_accepted {
+            let cursor: u64 = self.cursors[i as usize];
+            write_result = write_result.and(tcp_write_safe(&cursor.to_be_bytes(), stream))
+        }
+        return write_result
     }
 }
-
 
 pub struct FileInfo {
     pub size: u64,
@@ -366,7 +415,7 @@ pub struct DirectoryOfferPacket {
     pub files: Vec<FileInfo>
 }
 impl DirectoryOfferPacket {
-    pub const ID: u32 = 800_000;
+    pub const ID: u32 = 900_000;
 
     pub fn new(directory_path: &str) -> Self {
         let dir_name = util::get_path_name(directory_path).to_string();
