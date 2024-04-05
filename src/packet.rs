@@ -314,6 +314,7 @@ pub struct BeginUploadPacket {
     pub file_indexes: Vec<u32>, // 0-indexed
     pub cursors: Vec<u64>,
 }
+
 impl BeginUploadPacket {
     pub const ID: u32 = 800_000;
 
@@ -324,6 +325,16 @@ impl BeginUploadPacket {
     }
     pub fn has_any_files(&self) -> bool {
         self.files_accepted > 0 && self.file_indexes.len() > 0 && self.cursors.len() > 0
+    }
+
+    pub fn accept_all(transaction_id: u64, count: u64) -> Self {
+        let mut file_indexes = Vec::with_capacity(count as usize);
+        let mut cursors = Vec::with_capacity(count as usize);
+        for i in 0..count {
+            file_indexes.push(i as u32);
+            cursors.push(0);
+        }
+        Self { transaction_id, files_accepted: count as u32, file_indexes, cursors }
     }
 
     pub fn new(transaction_id: u64, file_indexes: Vec<u32>, cursors: Vec<u64>) -> Self {
@@ -411,7 +422,7 @@ pub struct DirectoryOfferPacket {
     pub total_size: u64,
     pub file_count: u64,
     pub name_size: u64,
-    pub name: String,
+    pub directory_name: String,
     pub files: Vec<FileInfo>
 }
 impl DirectoryOfferPacket {
@@ -444,7 +455,7 @@ impl DirectoryOfferPacket {
 
         let file_count: u64 = files.len() as u64;
         let name_size = dir_name.len() as u64;
-        Self { total_size, file_count, name_size, name: dir_name, files }
+        Self { total_size, file_count, name_size, directory_name: dir_name, files }
     }
 
     pub fn from_bytes(field_bytes: &[u8]) -> Self {
@@ -482,11 +493,11 @@ impl DirectoryOfferPacket {
             files_bytes = &files_bytes[packet_end..]
         }
 
-        Self { total_size, file_count, name_size, name: dir_name, files }
+        Self { total_size, file_count, name_size, directory_name: dir_name, files }
     }
 
     pub fn empty() -> Self {
-        Self { total_size: 0, file_count: 0, name_size: 0, name: "".into(), files: vec![]}
+        Self { total_size: 0, file_count: 0, name_size: 0, directory_name: "".into(), files: vec![]}
     }
 }
 impl Packet for DirectoryOfferPacket {
@@ -507,7 +518,7 @@ impl Packet for DirectoryOfferPacket {
         let mut write_result = tcp_write_safe(&self.total_size.to_be_bytes(), stream)
             .and(tcp_write_safe(&self.file_count.to_be_bytes(), stream))
             .and(tcp_write_safe(&self.name_size.to_be_bytes(), stream))
-            .and(tcp_write_safe(self.name.as_bytes(), stream));
+            .and(tcp_write_safe(self.directory_name.as_bytes(), stream));
 
         for file in &self.files {
             write_result = write_result

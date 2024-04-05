@@ -1,3 +1,4 @@
+use std::collections::{HashMap};
 use std::fs::{File, OpenOptions};
 use std::io::{Write};
 use std::net::{Shutdown, TcpStream};
@@ -130,11 +131,30 @@ pub fn share_file_or_directory(shared_path: &str, stream: &mut TcpStream) {
         let dir_offer = DirectoryOfferPacket::new(shared_path);
         let _ = dir_offer.write_header(stream);
         let _ = dir_offer.write(stream);
-        eprintln!("Offered {} files.", dir_offer.file_count);
+        println!("Offered {} files.", dir_offer.file_count);
 
         let id = packet::read_id(stream);
+        if id != BeginUploadPacket::ID {
+            eprintln!("Unexpected packet ID={id}");
+            return;
+        }
         let packet_size = packet::read_content_size(stream);
-        let mut buffer: Vec<u8> = packet::read_into_new_buffer(stream, packet_size);
+        let buffer: Vec<u8> = packet::read_into_new_buffer(stream, packet_size);
+        let upload = BeginUploadPacket::from_bytes(&buffer);
+
+        if !upload.has_any_files() {
+            println!("Directory upload was cancelled!");
+            return;
+        }
+        println!("Directory was accepted.");
+
+        for (i, index) in upload.file_indexes.iter().enumerate() {
+            let file_shared = &dir_offer.files[*index as usize];
+            let cursor = upload.cursors[i];
+            let relative_path = Path::new(&dir_offer.directory_name).join(&file_shared.name);
+            let path_str = relative_path.to_str().unwrap();
+            stream_file(path_str, cursor, stream);
+        }
 
         return;
     }
@@ -187,7 +207,11 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
                 }
             };
 
-            receive_files(file_offer, stream);
+            receive_file(file_offer, stream);
+        }
+        DirectoryOfferPacket::ID => {
+            let dir_offer = DirectoryOfferPacket::from_bytes(&field_buffer);
+            receive_directory(dir_offer, stream);
         }
         FilePacket::ID => {
             match FilePacket::wrap(&field_buffer) {
@@ -213,7 +237,106 @@ fn read_and_handle_packet(stream: &mut TcpStream) {
     }
 }
 
-fn receive_files(file_offer: FileOfferPacket, stream: &mut TcpStream) {
+fn receive_directory(offer: DirectoryOfferPacket, stream: &mut TcpStream) {
+    let total_size = util::format_size(offer.total_size);
+    println!("Download {} files to {}?  [{total_size}] (y/n)", offer.file_count, offer.directory_name);
+    if !util::read_line().starts_with('y') {
+        write_denied_packet(stream);
+        return;
+    }
+
+    let dir_path = Path::new(&offer.directory_name);
+    if dir_path.exists() {
+        // Mark cursor positions per file
+        let Ok(fs_entries) = std::fs::read_dir(dir_path) else {
+            eprintln!("Cannot read directory, aborting");
+            write_denied_packet(stream);
+            return;
+        };
+
+        let mut fs_names: HashMap<String, u64> = HashMap::with_capacity(offer.file_count as usize);
+
+        for maybe_entry in fs_entries {
+            let Ok(entry) = maybe_entry else {
+                continue;
+            };
+            let path = entry.path();
+            if !path.is_file() {
+                continue
+            }
+            let entry_name = entry.file_name().to_str().unwrap().to_string();
+            let Ok(metadata) = path.metadata() else {
+                eprintln!("Skipping {entry_name}, unable to retrieve metadata");
+                continue
+            };
+            let size = metadata.len();
+            fs_names.insert(entry_name, size);
+        }
+
+        let mut file_indexes: Vec<u32> = vec![];
+        let mut cursors: Vec<u64> = vec![];
+
+        for (i, file) in offer.files.iter().enumerate() {
+            let Some(size) = fs_names.get(&file.name) else {
+                file_indexes.push(i as u32);
+                cursors.push(0);
+                continue;
+            };
+            if *size < file.size {
+                file_indexes.push(i as u32);
+                cursors.push(*size);
+            }
+        }
+        let accepted_upload = BeginUploadPacket::new(1, file_indexes, cursors);
+        let _ = accepted_upload.write_header(stream);
+        let _ = accepted_upload.write(stream);
+
+        if !accepted_upload.has_any_files() {
+            println!("No files were accepted");
+            return;
+        }
+
+        println!("Accepting {}/{} files", accepted_upload.files_accepted, offer.file_count);
+        for (i, index) in accepted_upload.file_indexes.iter().enumerate() {
+            let file_offered = &offer.files[*index as usize];
+            let current_size = accepted_upload.cursors[i];
+            let relative_path = Path::new(&offer.directory_name).join(&file_offered.name);
+            let dest_file = if current_size > 0 {
+                OpenOptions::new().append(true).open(relative_path).unwrap()
+            } else {
+                File::create(relative_path).expect("Failed to create destination file!")
+            };
+            read_and_write_file_to_disk(current_size, file_offered.size, dest_file, stream);
+            println!("Received {i}/{}", offer.file_count);
+        }
+        for file in offer.files {
+            println!("Downloaded {} [{}]", file.name, util::format_size(file.size));
+        }
+
+    } else {
+        match std::fs::create_dir(&offer.directory_name) {
+            Ok(_) => println!("Directory created"),
+            Err(err) => eprintln!("{err}"),
+        };
+        let accept = BeginUploadPacket::accept_all(1, offer.file_count);
+        let _ = accept.write_header(stream);
+        let _ = accept.write(stream);
+
+        println!("Accepting {}/{} files", accept.files_accepted, offer.file_count);
+        for (i, file) in offer.files.iter().enumerate() {
+            let relative_path = Path::new(&offer.directory_name).join(&file.name);
+            let dest_file = File::create(relative_path).expect("Failed to create destination file!");
+            read_and_write_file_to_disk(0, file.size, dest_file, stream);
+            println!("Received {i}/{}", offer.file_count);
+        }
+        for file in offer.files {
+            println!("Downloaded {} [{}]", file.name, util::format_size(file.size));
+        }
+    }
+
+}
+
+fn receive_file(file_offer: FileOfferPacket, stream: &mut TcpStream) {
     let path = Path::new(&file_offer.file_name);
     let mut current_size = 0;
     // Resume download from cursor pos
@@ -250,19 +373,20 @@ fn receive_files(file_offer: FileOfferPacket, stream: &mut TcpStream) {
             write_denied_packet(stream);
             return;
         }
-
     }
-
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .append(true)
         .open(file_offer.file_name).unwrap();
+    read_and_write_file_to_disk(current_size, file_offer.file_size, file, stream);
+}
 
+fn read_and_write_file_to_disk(mut current_size: u64, total_size: u64, mut file: File, stream: &mut TcpStream) {
     let mut buffer = vec![0u8; MB_1];
     let mut bytes_read = 0;
     let mut expected_chunk_id = 0;
     // Begin reading file packets
     let start = Instant::now();
-    while current_size < file_offer.file_size {
+    while current_size < total_size {
         let id = packet::read_id(stream);
         if id != FilePacket::ID {
             eprintln!("{id} wasn't expected at this time");
@@ -303,15 +427,14 @@ fn receive_files(file_offer: FileOfferPacket, stream: &mut TcpStream) {
         expected_chunk_id += 1;
         let seconds_so_far = start.elapsed().as_secs_f64();
         let speed = bytes_read as f64 / MB_1 as f64 / seconds_so_far;
-        let progress = (current_size as f64 / file_offer.file_size as f64) * 100.0;
-        let eta = util::format_eta(current_size, file_offer.file_size, speed);
+        let progress = (current_size as f64 / total_size as f64) * 100.0;
+        let eta = util::format_eta(current_size, total_size, speed);
         eprintln!("progress={progress:.2}% ({speed:.2}MB/s) ETA: {eta}");
         buffer.clear();
     }
     let elapsed = start.elapsed().as_secs_f64();
     let time_format = util::format_time(elapsed);
     println!("Download completed in {time_format}");
-
 }
 
 fn stream_file(path: &str, mut cursor: u64, stream: &mut TcpStream) {

@@ -242,7 +242,7 @@ fn directory_offer_test() {
     let offer_packet = DirectoryOfferPacket::from_bytes(&field_buffer);
     println!("Dir size: {} | File name: {} | File count: {}",
              util::format_size(offer_packet.total_size),
-             offer_packet.name,
+             offer_packet.directory_name,
              offer_packet.file_count,
     );
     for file in offer_packet.files {
