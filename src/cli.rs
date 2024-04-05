@@ -131,6 +131,10 @@ pub fn share_file_or_directory(shared_path: &str, stream: &mut TcpStream) {
         let dir_offer = DirectoryOfferPacket::new(shared_path);
         let _ = dir_offer.write_header(stream);
         let _ = dir_offer.write(stream);
+        if dir_offer.file_count == 0 {
+            println!("No files found");
+            return;
+        }
         println!("Offered {} files.", dir_offer.file_count);
 
         let id = packet::read_id(stream);
@@ -151,7 +155,7 @@ pub fn share_file_or_directory(shared_path: &str, stream: &mut TcpStream) {
         for (i, index) in upload.file_indexes.iter().enumerate() {
             let file_shared = &dir_offer.files[*index as usize];
             let cursor = upload.cursors[i];
-            let relative_path = Path::new(&dir_offer.directory_name).join(&file_shared.name);
+            let relative_path = path.join(&file_shared.name);
             let path_str = relative_path.to_str().unwrap();
             stream_file(path_str, cursor, stream);
         }
@@ -246,7 +250,8 @@ fn receive_directory(offer: DirectoryOfferPacket, stream: &mut TcpStream) {
     }
 
     let dir_path = Path::new(&offer.directory_name);
-    if dir_path.exists() {
+
+    let upload = if dir_path.exists() {
         // Mark cursor positions per file
         let Ok(fs_entries) = std::fs::read_dir(dir_path) else {
             eprintln!("Cannot read directory, aborting");
@@ -290,48 +295,42 @@ fn receive_directory(offer: DirectoryOfferPacket, stream: &mut TcpStream) {
         let accepted_upload = BeginUploadPacket::new(1, file_indexes, cursors);
         let _ = accepted_upload.write_header(stream);
         let _ = accepted_upload.write(stream);
-
-        if !accepted_upload.has_any_files() {
-            println!("No files were accepted");
-            return;
-        }
-
-        println!("Accepting {}/{} files", accepted_upload.files_accepted, offer.file_count);
-        for (i, index) in accepted_upload.file_indexes.iter().enumerate() {
-            let file_offered = &offer.files[*index as usize];
-            let current_size = accepted_upload.cursors[i];
-            let relative_path = Path::new(&offer.directory_name).join(&file_offered.name);
-            let dest_file = if current_size > 0 {
-                OpenOptions::new().append(true).open(relative_path).unwrap()
-            } else {
-                File::create(relative_path).expect("Failed to create destination file!")
-            };
-            read_and_write_file_to_disk(current_size, file_offered.size, dest_file, stream);
-            println!("Received {i}/{}", offer.file_count);
-        }
-        for file in offer.files {
-            println!("Downloaded {} [{}]", file.name, util::format_size(file.size));
-        }
-
+        accepted_upload
     } else {
         match std::fs::create_dir(&offer.directory_name) {
             Ok(_) => println!("Directory created"),
-            Err(err) => eprintln!("{err}"),
+            Err(err) => {
+                eprintln!("{err}");
+                return;
+            },
         };
-        let accept = BeginUploadPacket::accept_all(1, offer.file_count);
-        let _ = accept.write_header(stream);
-        let _ = accept.write(stream);
+        let accepted_upload = BeginUploadPacket::accept_all(1, offer.file_count);
+        let _ = accepted_upload.write_header(stream);
+        let _ = accepted_upload.write(stream);
+        accepted_upload
+    };
 
-        println!("Accepting {}/{} files", accept.files_accepted, offer.file_count);
-        for (i, file) in offer.files.iter().enumerate() {
-            let relative_path = Path::new(&offer.directory_name).join(&file.name);
-            let dest_file = File::create(relative_path).expect("Failed to create destination file!");
-            read_and_write_file_to_disk(0, file.size, dest_file, stream);
-            println!("Received {i}/{}", offer.file_count);
-        }
-        for file in offer.files {
-            println!("Downloaded {} [{}]", file.name, util::format_size(file.size));
-        }
+    if !upload.has_any_files() {
+        println!("No files were accepted");
+        return;
+    }
+
+    println!("Accepting {} out of {} files", upload.files_accepted, offer.file_count);
+    for (i, index) in upload.file_indexes.iter().enumerate() {
+        let file_offered = &offer.files[*index as usize];
+        let current_size = upload.cursors[i];
+        let relative_path = Path::new(&offer.directory_name).join(&file_offered.name);
+        let dest_file = if current_size > 0 {
+            OpenOptions::new().append(true).open(relative_path).unwrap()
+        } else {
+            File::create(relative_path).expect("Failed to create destination file!")
+        };
+        read_and_write_file_to_disk(current_size, file_offered.size, dest_file, stream);
+        println!("Received {}/{} files", i+1, offer.file_count);
+    }
+    println!("Downloads:");
+    for file in offer.files {
+        println!("{} [{}]", file.name, util::format_size(file.size));
     }
 
 }
