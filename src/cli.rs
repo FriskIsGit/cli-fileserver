@@ -129,12 +129,12 @@ pub fn share_file_or_directory(shared_path: &str, stream: &mut TcpStream) {
     }
     if path.is_dir() {
         let dir_offer = DirectoryOfferPacket::new(shared_path);
-        let _ = dir_offer.write_header(stream);
-        let _ = dir_offer.write(stream);
         if dir_offer.file_count == 0 {
             println!("No files found");
             return;
         }
+        let _ = dir_offer.write_header(stream);
+        let _ = dir_offer.write(stream);
         println!("Offered {} files.", dir_offer.file_count);
 
         let id = packet::read_id(stream);
